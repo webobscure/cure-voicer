@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+coverage/
+native/macos-asr/.build/
+.swiftpm/
+*.tsbuildinfo
+.DS_Store
+*.log
+*.wav
+.env
+.env.*
+!.env.example

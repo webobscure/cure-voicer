@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./overlay.css" />
+    <title>Cure Voicer</title>
+  </head>
+  <body data-state="idle">
+    <main class="voice-overlay" aria-live="polite">
+      <div class="orb-stage">
+        <div class="orb-aura"></div>
+        <div class="orb-aura aura-secondary"></div>
+        <div class="voice-orb">
+          <img
+            class="brand-logo"
+            alt=""
+            draggable="false"
+          />
+          <div class="logo-energy" aria-hidden="true"></div>
+          <div class="logo-sheen" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="overlay-caption" id="overlayCaption">Слушаю</div>
+    </main>
+    <script type="module" src="./overlay.ts"></script>
+  </body>
+</html>

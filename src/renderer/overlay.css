@@ -1,0 +1,212 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --voice-level: 0;
+  --voice-transient: 0;
+  --orb-x: 0px;
+  --orb-y: 0px;
+  --orb-rotate: 0deg;
+  --orb-scale-x: 1;
+  --orb-scale-y: 1;
+  --breath: 0;
+  --aura-duration: 5.4s;
+  --aura-secondary-duration: 3.8s;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  user-select: none;
+}
+
+.voice-overlay {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 220ms ease, transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body[data-state='idle'] .voice-overlay {
+  opacity: 0.78;
+  transform: translateY(12px) scale(0.78);
+}
+
+body[data-state='idle'] .voice-orb {
+  filter: saturate(0.68) brightness(0.76);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 -10px 20px rgba(0, 18, 54, 0.28),
+    0 5px 18px rgba(15, 83, 175, 0.22),
+    0 2px 7px rgba(0, 0, 0, 0.24);
+}
+
+body[data-state='idle'] .orb-aura {
+  opacity: 0.16;
+}
+
+body[data-state='idle'] .aura-secondary {
+  opacity: 0.08;
+}
+
+body[data-state='idle'] .overlay-caption {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px) scale(0.88);
+}
+
+.orb-stage {
+  position: relative;
+  display: grid;
+  width: 92px;
+  height: 92px;
+  place-items: center;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  cursor: grab;
+}
+
+.orb-stage:active {
+  cursor: grabbing;
+}
+
+.orb-aura {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: conic-gradient(from 20deg, #35e8ff, #0077ff, #735cff, #b65cff, #35e8ff);
+  filter: blur(calc(9px + var(--voice-level) * 8px + var(--voice-transient) * 4px));
+  opacity: calc(0.24 + var(--voice-level) * 0.32);
+  animation: aura-spin var(--aura-duration) linear infinite;
+}
+
+.aura-secondary {
+  inset: 8px;
+  background: conic-gradient(from 210deg, transparent 0 12%, #37dcff 27%, transparent 43%, #8069ff 64%, #b970ff 78%, transparent 92%);
+  filter: blur(calc(6px + var(--voice-level) * 7px));
+  opacity: calc(0.14 + var(--voice-level) * 0.26);
+  animation-direction: reverse;
+  animation-duration: var(--aura-secondary-duration);
+}
+
+.voice-orb {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  overflow: hidden;
+  border: 0.5px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  background: #020b1c;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 -12px 24px rgba(0, 22, 70, 0.34),
+    0 8px 26px rgba(5, 70, 190, 0.36),
+    0 2px 8px rgba(0, 0, 0, 0.28);
+  transform: translate(var(--orb-x), var(--orb-y)) rotate(var(--orb-rotate)) scale(var(--orb-scale-x), var(--orb-scale-y));
+  will-change: transform, box-shadow;
+  transition: box-shadow 180ms ease, filter 220ms ease;
+}
+
+.voice-orb::after {
+  position: absolute;
+  z-index: 3;
+  inset: 1px;
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: inherit;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  content: '';
+}
+
+.brand-logo {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  pointer-events: none;
+  transform-origin: center;
+  will-change: transform, filter;
+}
+
+.logo-energy {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 68% 42%, rgba(35, 222, 255, 0.45), transparent 32%),
+    radial-gradient(circle at 35% 61%, rgba(151, 88, 255, 0.38), transparent 38%);
+  filter: blur(calc(5px + var(--voice-level) * 5px));
+  mix-blend-mode: screen;
+  opacity: calc(0.14 + var(--voice-level) * 0.34);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.logo-sheen {
+  position: absolute;
+  inset: 2px 8px 42px;
+  border-radius: 50%;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.3), transparent 64%);
+  filter: blur(2px);
+  opacity: 0.36;
+  pointer-events: none;
+  transform: rotate(-8deg);
+}
+
+.overlay-caption {
+  min-width: 62px;
+  margin-top: -2px;
+  padding: 5px 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(22, 22, 25, 0.68);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  text-align: center;
+  transition: opacity 160ms ease, transform 200ms ease, visibility 160ms;
+}
+
+body[data-state='transcribing'] .voice-orb,
+body[data-state='transcribing'] .orb-aura {
+  animation-duration: 1.25s;
+}
+
+body[data-state='error'] .orb-aura {
+  background: conic-gradient(#ff453a, #ff9f0a, #ff453a);
+}
+
+body[data-state='error'] .voice-orb {
+  filter: saturate(0.45);
+}
+
+@keyframes aura-spin {
+  from { transform: scale(calc(0.93 + var(--voice-level) * 0.19 + var(--breath) * .025)) rotate(0deg); }
+  to { transform: scale(calc(0.93 + var(--voice-level) * 0.19 + var(--breath) * .025)) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
