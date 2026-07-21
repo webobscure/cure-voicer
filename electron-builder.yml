@@ -35,7 +35,7 @@ win:
   requestedExecutionLevel: asInvoker
 
 nsis:
-  artifactName: ${productName}-${version}-windows-${arch}-setup.${ext}
+  artifactName: Cure-Voicer-${version}-windows-${arch}-setup.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
@@ -46,6 +46,6 @@ nsis:
   deleteAppDataOnUninstall: false
 
 portable:
-  artifactName: ${productName}-${version}-windows-${arch}-portable.${ext}
+  artifactName: Cure-Voicer-${version}-windows-${arch}-portable.${ext}
 
 publish: null
