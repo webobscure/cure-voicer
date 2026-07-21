@@ -1,14 +1,22 @@
 import { app } from 'electron'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PcmRecordingPayload, RecordingResult } from '../shared/contracts'
+import {
+  shouldRunContextualCorrection,
+  type TranscriptCorrector
+} from '../shared/smart-correction'
 import type { AsrEngine } from './asr/types'
 import { encodeFloat32PcmAsWav, float32FromBytes } from './audio/wav'
 import { TextInserter } from './text-inserter'
+import { postProcessTranscript } from '../shared/transcript-postprocessor'
 
 export class RecordingService {
+  private previousTranscript = ''
+
   constructor(
     private readonly asrEngine: AsrEngine,
+    private readonly transcriptCorrector?: TranscriptCorrector,
     private readonly textInserter = new TextInserter()
   ) {}
 
@@ -16,7 +24,15 @@ export class RecordingService {
     return path.join(app.getPath('userData'), 'recordings')
   }
 
-  async finish(payload: PcmRecordingPayload): Promise<RecordingResult> {
+  async finish(
+    payload: PcmRecordingPayload,
+    options: {
+      autoPaste?: boolean
+      keepRecording?: boolean
+      preferredTerms?: string[]
+      smartCorrectionEnabled?: boolean
+    } = {}
+  ): Promise<RecordingResult> {
     if (payload.sampleRate !== 16_000) {
       throw new Error(`Unsupported sample rate: ${payload.sampleRate}`)
     }
@@ -41,16 +57,40 @@ export class RecordingService {
     await writeFile(recordingPath, encodeFloat32PcmAsWav(samples, payload.sampleRate))
 
     const startedAt = performance.now()
-    const result = await this.asrEngine.transcribe(recordingPath)
-    const transcript = result.text.trim()
-    const insertion = await this.textInserter.insert(transcript)
+    const keepRecording = options.keepRecording ?? true
+    try {
+      const result = await this.asrEngine.transcribe(recordingPath)
+      const preferredTerms = options.preferredTerms ?? []
+      const normalizedText = postProcessTranscript(result.text, preferredTerms)
+      let correctedText = normalizedText
+      if (
+        options.smartCorrectionEnabled &&
+        this.transcriptCorrector &&
+        shouldRunContextualCorrection(result.text, normalizedText)
+      ) {
+        correctedText = await this.transcriptCorrector
+          .correct(normalizedText, {
+            previousText: this.previousTranscript,
+            preferredTerms
+          })
+          .catch((error) => {
+            console.warn('Smart correction fallback is being used', error)
+            return normalizedText
+          })
+      }
+      const transcript = postProcessTranscript(correctedText, preferredTerms)
+      if (transcript) this.previousTranscript = transcript
+      const insertion = await this.textInserter.insert(transcript, options.autoPaste ?? true)
 
-    return {
-      recordingPath,
-      transcript,
-      engine: this.asrEngine.id,
-      latencyMs: Math.round(performance.now() - startedAt),
-      insertion
+      return {
+        recordingPath: keepRecording ? recordingPath : '',
+        transcript,
+        engine: this.asrEngine.id,
+        latencyMs: Math.round(performance.now() - startedAt),
+        insertion
+      }
+    } finally {
+      if (!keepRecording) await unlink(recordingPath).catch(() => undefined)
     }
   }
 }

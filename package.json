@@ -2,24 +2,36 @@
   "name": "cure-voicer",
   "version": "0.1.0",
   "private": true,
+  "author": "Cure Voicer Contributors",
   "description": "Private, local-first desktop dictation for macOS and Windows.",
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
+    "build:tray-icons": "node scripts/render-tray-icons.mjs",
     "build:macos-asr": "swift build -c release --package-path native/macos-asr",
     "build": "electron-vite build",
+    "pack:win": "npm run build && electron-builder --win --x64 --config electron-builder.yml",
+    "pack:win:portable": "npm run build && electron-builder --win portable --x64 --config electron-builder.yml",
+    "pack:win:nsis": "npm run build && electron-builder --win nsis --x64 --config electron-builder.yml",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.10.0",
     "electron": "^43.1.1",
+    "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "node-llama-cpp": "^3.19.1",
+    "sherpa-onnx-node": "^1.13.4",
+    "uiohook-napi": "^1.5.5"
   }
 }

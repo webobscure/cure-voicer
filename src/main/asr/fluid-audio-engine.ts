@@ -5,6 +5,8 @@ import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AsrEngine, TranscriptionResult } from './types'
+import type { AsrStatus } from '../../shared/contracts'
+import { initialAsrStatus } from '../../shared/asr'
 
 const protocolPrefix = 'CVJSON:'
 
@@ -24,6 +26,9 @@ interface PendingRequest {
 export class FluidAudioEngine implements AsrEngine {
   readonly id = 'Parakeet V3 · Core ML'
 
+  private currentStatus: AsrStatus = fluidAsrStatus('downloaded')
+  private statusListener: ((status: AsrStatus) => void) | null = null
+
   private helper: ChildProcessWithoutNullStreams | null = null
   private readyPromise: Promise<void> | null = null
   private resolveReady: (() => void) | null = null
@@ -34,6 +39,14 @@ export class FluidAudioEngine implements AsrEngine {
 
   get helperExecutablePath(): string {
     return this.helperPath
+  }
+
+  get status(): AsrStatus {
+    return { ...this.currentStatus }
+  }
+
+  onStatusChanged(listener: (status: AsrStatus) => void): void {
+    this.statusListener = listener
   }
 
   async isAvailable(): Promise<boolean> {
@@ -51,7 +64,17 @@ export class FluidAudioEngine implements AsrEngine {
     if (!(await this.isAvailable())) {
       throw new Error('Parakeet helper is not available on this computer')
     }
-    await this.ensureReady()
+    this.setStatus(fluidAsrStatus('loading'))
+    try {
+      await this.ensureReady()
+      this.setStatus(fluidAsrStatus('ready'))
+    } catch (error) {
+      this.setStatus({
+        ...fluidAsrStatus('error'),
+        error: error instanceof Error ? error.message : String(error)
+      })
+      throw error
+    }
   }
 
   async transcribe(wavPath: string): Promise<TranscriptionResult> {
@@ -81,6 +104,11 @@ export class FluidAudioEngine implements AsrEngine {
     this.helper?.kill()
     this.helper = null
     this.readyPromise = null
+  }
+
+  private setStatus(status: AsrStatus): void {
+    this.currentStatus = status
+    this.statusListener?.(this.status)
   }
 
   private ensureReady(): Promise<void> {
@@ -170,4 +198,8 @@ function resolveHelperPath(): string {
     'release',
     'cure-voicer-asr'
   )
+}
+
+function fluidAsrStatus(state: AsrStatus['state']): AsrStatus {
+  return initialAsrStatus(state, 'Parakeet V3 · Core ML', 'Parakeet TDT 0.6B V3', 0)
 }

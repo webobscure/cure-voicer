@@ -1,0 +1,47 @@
+appId: com.curevoicer.desktop
+productName: Cure Voicer
+asar: true
+
+directories:
+  output: release
+
+files:
+  - out/**/*
+  - assets/branding/**/*
+  - README.md
+  - PRIVACY.md
+  - THIRD_PARTY_NOTICES.md
+  - package.json
+
+asarUnpack:
+  - node_modules/**/*.node
+  - node_modules/sherpa-onnx-*/**/*
+  - node_modules/uiohook-napi/**/*
+  - node_modules/node-llama-cpp/**/*
+
+win:
+  icon: assets/branding/cure-voicer.ico
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  artifactName: ${productName}-${version}-windows-${arch}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Cure Voicer
+  uninstallDisplayName: Cure Voicer
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-windows-${arch}-portable.${ext}
+
+publish: null

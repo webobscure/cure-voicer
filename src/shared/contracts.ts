@@ -3,14 +3,26 @@ export const IPC = {
   setRecordingState: 'recording:set-state',
   setAudioLevel: 'recording:set-audio-level',
   finishRecording: 'recording:finish',
-  toggleRequested: 'recording:toggle-requested',
+  recordingCommand: 'recording:command',
   overlayState: 'overlay:state',
   overlayAudioLevel: 'overlay:audio-level',
   setOverlayPlacement: 'overlay:set-placement',
   overlayPlacementChanged: 'overlay:placement-changed',
   beginOverlayDrag: 'overlay:begin-drag',
   endOverlayDrag: 'overlay:end-drag',
-  showOverlayMenu: 'overlay:show-menu'
+  showOverlayMenu: 'overlay:show-menu',
+  overlayPreferencesChanged: 'overlay:preferences-changed',
+  updatePreferences: 'settings:update-preferences',
+  setHotkeyCapture: 'settings:set-hotkey-capture',
+  addVocabularyTerm: 'settings:add-vocabulary-term',
+  removeVocabularyTerm: 'settings:remove-vocabulary-term',
+  removeHistoryEntry: 'settings:remove-history-entry',
+  clearHistory: 'settings:clear-history',
+  copyText: 'settings:copy-text',
+  prepareAsr: 'models:prepare-asr',
+  prepareSmartCorrection: 'models:prepare-smart-correction',
+  smartCorrectionStatusChanged: 'models:smart-correction-status-changed',
+  asrStatusChanged: 'models:asr-status-changed'
 } as const
 
 export type RecordingState =
@@ -32,6 +44,76 @@ export interface OverlayPlacement {
   y?: number
 }
 
+export type OverlayMotion = 'calm' | 'balanced' | 'expressive'
+
+export type RecordingActivationMode = 'toggle' | 'hold'
+
+export type SmartCorrectionState =
+  | 'not-downloaded'
+  | 'downloaded'
+  | 'downloading'
+  | 'loading'
+  | 'ready'
+  | 'error'
+
+export interface SmartCorrectionStatus {
+  state: SmartCorrectionState
+  progress: number
+  modelName: string
+  modelSizeBytes: number
+  error?: string
+}
+
+export interface AsrStatus {
+  state: SmartCorrectionState
+  progress: number
+  engine: string
+  modelName: string
+  modelSizeBytes: number
+  error?: string
+}
+
+export type HoldKey =
+  | 'left-control'
+  | 'right-control'
+  | 'left-option'
+  | 'right-option'
+  | 'left-command'
+  | 'right-command'
+  | 'left-shift'
+  | 'right-shift'
+  | 'f6'
+  | 'f7'
+  | 'f8'
+  | 'f9'
+  | 'f10'
+  | 'f11'
+  | 'f12'
+
+export type RecordingCommand = 'toggle' | 'start' | 'stop'
+
+export interface AppPreferences {
+  launchAtLogin: boolean
+  activationMode: RecordingActivationMode
+  accelerator: string
+  holdKey: HoldKey
+  microphoneId: string
+  autoPaste: boolean
+  keepRecordings: boolean
+  showOverlayWhenIdle: boolean
+  overlayMotion: OverlayMotion
+  smartCorrectionEnabled: boolean
+}
+
+export interface DictationHistoryItem {
+  id: string
+  createdAt: string
+  text: string
+  durationMs: number
+  latencyMs: number
+  insertion: TextInsertionStatus
+}
+
 export interface AppInfo {
   version: string
   platform: NodeJS.Platform
@@ -39,6 +121,12 @@ export interface AppInfo {
   recordingsDirectory: string
   asrEngine: string
   overlayPlacement: OverlayPlacement
+  preferences: AppPreferences
+  globalInputAvailable: boolean
+  vocabulary: string[]
+  history: DictationHistoryItem[]
+  smartCorrection: SmartCorrectionStatus
+  asrStatus: AsrStatus
 }
 
 export interface PcmRecordingPayload {
@@ -63,11 +151,25 @@ export interface CureVoicerApi {
   setAudioLevel(level: number): void
   finishRecording(payload: PcmRecordingPayload): Promise<RecordingResult>
   setOverlayPlacement(mode: Exclude<OverlayPlacementMode, 'custom'>): Promise<OverlayPlacement>
+  updatePreferences(patch: Partial<AppPreferences>): Promise<AppPreferences>
+  setHotkeyCapture(active: boolean): Promise<boolean>
+  addVocabularyTerm(term: string): Promise<string[]>
+  removeVocabularyTerm(term: string): Promise<string[]>
+  removeHistoryEntry(id: string): Promise<DictationHistoryItem[]>
+  clearHistory(): Promise<void>
+  copyText(text: string): Promise<void>
+  prepareAsr(): Promise<AsrStatus>
+  prepareSmartCorrection(): Promise<SmartCorrectionStatus>
   beginOverlayDrag(): void
   endOverlayDrag(): void
   showOverlayMenu(): void
-  onToggleRequested(callback: () => void): () => void
+  onRecordingCommand(callback: (command: RecordingCommand) => void): () => void
   onOverlayState(callback: (state: RecordingState) => void): () => void
   onOverlayAudioLevel(callback: (level: number) => void): () => void
   onOverlayPlacementChanged(callback: (placement: OverlayPlacement) => void): () => void
+  onOverlayPreferencesChanged(callback: (preferences: AppPreferences) => void): () => void
+  onSmartCorrectionStatusChanged(
+    callback: (status: SmartCorrectionStatus) => void
+  ): () => void
+  onAsrStatusChanged(callback: (status: AsrStatus) => void): () => void
 }

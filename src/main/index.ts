@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   globalShortcut,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -13,10 +14,16 @@ import {
   Tray
 } from 'electron'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { uIOhook, UiohookKey, type UiohookKeyboardEvent } from 'uiohook-napi'
 import type {
   AppInfo,
+  AppPreferences,
+  DictationHistoryItem,
+  HoldKey,
+  OverlayMotion,
   OverlayPlacement,
   OverlayPlacementMode,
   PcmRecordingPayload,
@@ -25,12 +32,23 @@ import type {
 import { IPC } from '../shared/contracts'
 import { createAsrEngine } from './asr/create-engine'
 import { RecordingService } from './recording-service'
+import { isTextInsertionInProgress } from './text-inserter'
+import { SmartCorrectionService } from './smart-correction-service'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const accelerator = 'CommandOrControl+Shift+Space'
+const defaultAccelerator = 'CommandOrControl+Shift+Space'
+const defaultHoldKey: HoldKey =
+  process.platform === 'darwin' ? 'right-option' : 'right-control'
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
-const asrEngine = createAsrEngine()
-const recordingService = new RecordingService(asrEngine)
+const asrEngine = createAsrEngine({
+  windowsWorkerPath: path.join(currentDirectory, 'windows-asr-worker.js'),
+  windowsModelsDirectory: path.join(app.getPath('userData'), 'models', 'parakeet-v3-onnx')
+})
+const smartCorrectionService = new SmartCorrectionService(
+  path.join(currentDirectory, 'llm-worker.js'),
+  path.join(app.getPath('userData'), 'models', 'smart-correction')
+)
+const recordingService = new RecordingService(asrEngine, smartCorrectionService)
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -38,13 +56,40 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let currentState: RecordingState = 'idle'
 let overlayPlacement: OverlayPlacement = { mode: 'bottom-center' }
+let preferences: AppPreferences = {
+  launchAtLogin: false,
+  activationMode: 'hold',
+  accelerator: defaultAccelerator,
+  holdKey: defaultHoldKey,
+  microphoneId: '',
+  autoPaste: true,
+  keepRecordings: true,
+  showOverlayWhenIdle: true,
+  overlayMotion: 'balanced',
+  smartCorrectionEnabled: false
+}
+let vocabulary: string[] = []
+let history: DictationHistoryItem[] = []
 let isQuitting = false
+let applicationResourcesDisposed = false
 let isProgrammaticOverlayMove = false
 let overlayMoveSaveTimer: ReturnType<typeof setTimeout> | null = null
 let overlayDragTimer: ReturnType<typeof setInterval> | null = null
 let overlayDragSafetyTimer: ReturnType<typeof setTimeout> | null = null
 let activeRecordingFinish: ReturnType<RecordingService['finish']> | null = null
 let overlayHiddenUntilRecording = false
+let keyboardHookRunning = false
+let holdKeyPressed = false
+let activeHoldKeyCode: number = UiohookKey.CtrlRight
+let hotkeyCaptureActive = false
+let hotkeyCaptureSafetyTimer: ReturnType<typeof setTimeout> | null = null
+
+interface PersistedAppState {
+  overlayPlacement: OverlayPlacement
+  preferences: AppPreferences
+  vocabulary: string[]
+  history: DictationHistoryItem[]
+}
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -54,6 +99,9 @@ function createWindow(): BrowserWindow {
     minHeight: 560,
     show: false,
     backgroundColor: process.platform === 'darwin' ? '#00000000' : '#f3f3f5',
+    ...(process.platform === 'win32'
+      ? { icon: path.join(app.getAppPath(), 'assets', 'branding', 'cure-voicer.ico') }
+      : {}),
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset' as const,
@@ -78,6 +126,10 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       window.hide()
     }
+  })
+
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -122,8 +174,9 @@ function createOverlayWindow(): BrowserWindow {
 
   window.webContents.once('did-finish-load', () => {
     window.webContents.send(IPC.overlayState, currentState)
+    window.webContents.send(IPC.overlayPreferencesChanged, preferences)
     positionOverlay(window)
-    window.showInactive()
+    if (preferences.showOverlayWhenIdle) window.showInactive()
   })
 
   window.on('move', () => {
@@ -148,19 +201,28 @@ function createOverlayWindow(): BrowserWindow {
 }
 
 function createTray(): Tray {
+  const iconFile =
+    process.platform === 'win32'
+      ? 'cure-voicer-tray-windows.png'
+      : 'cure-voicer-trayTemplate.png'
   const icon = nativeImage
-    .createFromDataURL(
-      'data:image/svg+xml;charset=utf-8,' +
-        encodeURIComponent(
-          '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><rect x="6" y="2" width="6" height="10" rx="3" fill="black"/><path d="M3.5 8.5a5.5 5.5 0 0 0 11 0M9 14v2M6 16h6" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round"/></svg>'
-        )
+    .createFromPath(
+      path.join(
+        app.getAppPath(),
+        'assets',
+        'branding',
+        iconFile
+      )
     )
-    .resize({ width: 18, height: 18 })
 
+  if (icon.isEmpty()) throw new Error('Could not create Cure Voicer tray icon')
   if (process.platform === 'darwin') icon.setTemplateImage(true)
 
   const appTray = new Tray(icon)
   appTray.setToolTip('Cure Voicer')
+  appTray.on('click', () => {
+    if (trayMenu) appTray.popUpContextMenu(trayMenu)
+  })
   appTray.on('right-click', () => {
     if (trayMenu) appTray.popUpContextMenu(trayMenu)
   })
@@ -189,10 +251,7 @@ function rebuildTrayMenu(appTray = tray): void {
     { label: 'Настройки…', click: showWindow },
     {
       label: 'Выйти',
-      click: () => {
-        isQuitting = true
-        app.quit()
-      }
+      click: quitApplication
     }
   ])
 }
@@ -203,10 +262,16 @@ function registerIpc(): void {
     return {
       version: app.getVersion(),
       platform: process.platform,
-      accelerator,
+      accelerator: preferences.accelerator,
       recordingsDirectory: recordingService.recordingsDirectory,
       asrEngine: asrEngine.id,
-      overlayPlacement
+      overlayPlacement,
+      preferences,
+      globalInputAvailable: isGlobalInputAvailable(),
+      vocabulary,
+      history,
+      smartCorrection: smartCorrectionService.status,
+      asrStatus: asrEngine.status
     }
   })
 
@@ -234,9 +299,29 @@ function registerIpc(): void {
       validateRecordingPayload(payload)
       if (activeRecordingFinish) return activeRecordingFinish
 
-      activeRecordingFinish = recordingService.finish(payload)
+      activeRecordingFinish = recordingService.finish(payload, {
+        autoPaste: preferences.autoPaste,
+        keepRecording: preferences.keepRecordings,
+        preferredTerms: vocabulary,
+        smartCorrectionEnabled: preferences.smartCorrectionEnabled
+      })
       try {
-        return await activeRecordingFinish
+        const result = await activeRecordingFinish
+        if (result.transcript) {
+          history = [
+            {
+              id: randomUUID(),
+              createdAt: new Date().toISOString(),
+              text: result.transcript,
+              durationMs: payload.durationMs,
+              latencyMs: result.latencyMs,
+              insertion: result.insertion
+            },
+            ...history
+          ].slice(0, 100)
+          await saveAppState()
+        }
+        return result
       } finally {
         activeRecordingFinish = null
       }
@@ -255,6 +340,72 @@ function registerIpc(): void {
       return overlayPlacement
     }
   )
+
+  ipcMain.handle(
+    IPC.updatePreferences,
+    async (event, patch: Partial<AppPreferences>) => {
+      assertTrustedSender(event)
+      preferences = await applyPreferencePatch(patch)
+      await saveAppState()
+      overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
+      updateOverlayState(currentState)
+      return preferences
+    }
+  )
+
+  ipcMain.handle(IPC.setHotkeyCapture, (event, active: boolean) => {
+    assertTrustedSender(event)
+    if (typeof active !== 'boolean') throw new Error('Invalid capture state')
+    setHotkeyCapture(active)
+    return isGlobalInputAvailable()
+  })
+
+  ipcMain.handle(IPC.addVocabularyTerm, async (event, rawTerm: string) => {
+    assertTrustedSender(event)
+    const term = sanitizeVocabularyTerm(rawTerm)
+    if (!vocabulary.some((item) => item.localeCompare(term, undefined, { sensitivity: 'accent' }) === 0)) {
+      vocabulary = [...vocabulary, term].sort((left, right) => left.localeCompare(right))
+      await saveAppState()
+    }
+    return vocabulary
+  })
+
+  ipcMain.handle(IPC.removeVocabularyTerm, async (event, rawTerm: string) => {
+    assertTrustedSender(event)
+    vocabulary = vocabulary.filter((term) => term !== rawTerm)
+    await saveAppState()
+    return vocabulary
+  })
+
+  ipcMain.handle(IPC.removeHistoryEntry, async (event, id: string) => {
+    assertTrustedSender(event)
+    history = history.filter((item) => item.id !== id)
+    await saveAppState()
+    return history
+  })
+
+  ipcMain.handle(IPC.clearHistory, async (event) => {
+    assertTrustedSender(event)
+    history = []
+    await saveAppState()
+  })
+
+  ipcMain.handle(IPC.copyText, (event, text: string) => {
+    assertTrustedSender(event)
+    if (typeof text !== 'string' || text.length > 100_000) throw new Error('Invalid text')
+    clipboard.writeText(text)
+  })
+
+  ipcMain.handle(IPC.prepareAsr, async (event) => {
+    assertTrustedSender(event)
+    await asrEngine.prepare?.()
+    return asrEngine.status
+  })
+
+  ipcMain.handle(IPC.prepareSmartCorrection, async (event) => {
+    assertTrustedSender(event)
+    return smartCorrectionService.prepare()
+  })
 
   ipcMain.on(IPC.beginOverlayDrag, (event) => {
     assertTrustedSender(event)
@@ -313,19 +464,128 @@ function validateRecordingPayload(payload: PcmRecordingPayload): void {
 }
 
 function requestRecordingToggle(): void {
-  if (currentState === 'idle' || currentState === 'error') {
+  sendRecordingCommand('toggle')
+}
+
+function sendRecordingCommand(command: 'toggle' | 'start' | 'stop'): void {
+  const shouldStart =
+    command === 'start' ||
+    (command === 'toggle' && (currentState === 'idle' || currentState === 'error'))
+  const shouldStop =
+    command === 'stop' || (command === 'toggle' && currentState === 'recording')
+
+  if (shouldStart && (currentState === 'idle' || currentState === 'error')) {
     updateOverlayState('starting')
-  } else if (currentState === 'recording') {
+  } else if (shouldStop && (currentState === 'starting' || currentState === 'recording')) {
     updateOverlayState('transcribing')
   }
-  mainWindow?.webContents.send(IPC.toggleRequested)
+
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send(IPC.recordingCommand, command)
+}
+
+function handleGlobalKeyDown(event: UiohookKeyboardEvent): void {
+  if (isTextInsertionInProgress()) return
+  if (preferences.activationMode !== 'hold') return
+  if (event.keycode !== activeHoldKeyCode || holdKeyPressed) return
+  holdKeyPressed = true
+  sendRecordingCommand('start')
+}
+
+function handleGlobalKeyUp(event: UiohookKeyboardEvent): void {
+  if (isTextInsertionInProgress()) return
+  if (event.keycode !== activeHoldKeyCode || !holdKeyPressed) return
+  holdKeyPressed = false
+  sendRecordingCommand('stop')
+}
+
+function configureRecordingActivation(nextPreferences: AppPreferences): void {
+  if (holdKeyPressed) sendRecordingCommand('stop')
+  globalShortcut.unregisterAll()
+  stopKeyboardHook()
+
+  if (nextPreferences.activationMode === 'hold') {
+    if (
+      process.platform === 'darwin' &&
+      !systemPreferences.isTrustedAccessibilityClient(false)
+    ) {
+      systemPreferences.isTrustedAccessibilityClient(true)
+      if (!systemPreferences.isTrustedAccessibilityClient(false)) return
+    }
+    activeHoldKeyCode = holdKeyCode(nextPreferences.holdKey)
+    uIOhook.on('keydown', handleGlobalKeyDown)
+    uIOhook.on('keyup', handleGlobalKeyUp)
+    uIOhook.start()
+    keyboardHookRunning = true
+    return
+  }
+
+  if (!globalShortcut.register(nextPreferences.accelerator, requestRecordingToggle)) {
+    throw new Error('Эта горячая клавиша уже занята другой программой')
+  }
+}
+
+function setHotkeyCapture(active: boolean): void {
+  if (hotkeyCaptureSafetyTimer) clearTimeout(hotkeyCaptureSafetyTimer)
+  hotkeyCaptureSafetyTimer = null
+  hotkeyCaptureActive = active
+
+  if (active) {
+    if (holdKeyPressed) sendRecordingCommand('stop')
+    globalShortcut.unregisterAll()
+    stopKeyboardHook()
+    hotkeyCaptureSafetyTimer = setTimeout(() => setHotkeyCapture(false), 12_000)
+    return
+  }
+
+  configureRecordingActivation(preferences)
+}
+
+function isGlobalInputAvailable(): boolean {
+  return (
+    process.platform !== 'darwin' ||
+    systemPreferences.isTrustedAccessibilityClient(false)
+  )
+}
+
+function stopKeyboardHook(): void {
+  holdKeyPressed = false
+  uIOhook.removeListener('keydown', handleGlobalKeyDown)
+  uIOhook.removeListener('keyup', handleGlobalKeyUp)
+  if (!keyboardHookRunning) return
+  uIOhook.stop()
+  keyboardHookRunning = false
+}
+
+function holdKeyCode(key: HoldKey): number {
+  const codes: Record<HoldKey, number> = {
+    'left-control': UiohookKey.Ctrl,
+    'right-control': UiohookKey.CtrlRight,
+    'left-option': UiohookKey.Alt,
+    'right-option': UiohookKey.AltRight,
+    'left-command': UiohookKey.Meta,
+    'right-command': UiohookKey.MetaRight,
+    'left-shift': UiohookKey.Shift,
+    'right-shift': UiohookKey.ShiftRight,
+    f6: UiohookKey.F6,
+    f7: UiohookKey.F7,
+    f8: UiohookKey.F8,
+    f9: UiohookKey.F9,
+    f10: UiohookKey.F10,
+    f11: UiohookKey.F11,
+    f12: UiohookKey.F12
+  }
+  return codes[key]
 }
 
 function updateOverlayState(state: RecordingState): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
 
   if (state !== 'idle') overlayHiddenUntilRecording = false
-  if (state === 'idle' && overlayHiddenUntilRecording) {
+  if (
+    state === 'idle' &&
+    (overlayHiddenUntilRecording || !preferences.showOverlayWhenIdle)
+  ) {
     overlayWindow.hide()
     return
   }
@@ -381,10 +641,7 @@ function showOverlayContextMenu(): void {
     { type: 'separator' },
     {
       label: 'Выйти из Cure Voicer',
-      click: () => {
-        isQuitting = true
-        app.quit()
-      }
+      click: quitApplication
     }
   ])
   menu.popup({ window: overlayWindow })
@@ -451,20 +708,57 @@ function isPresetPlacement(
   return ['bottom-left', 'bottom-center', 'bottom-right'].includes(String(value))
 }
 
-async function loadOverlayPlacement(): Promise<void> {
+async function loadAppState(): Promise<void> {
   try {
     const contents = await readFile(settingsFilePath(), 'utf8')
-    const value = (JSON.parse(contents) as { overlayPlacement?: OverlayPlacement })
-      .overlayPlacement
-    if (!value) return
-    if (isPresetPlacement(value.mode)) overlayPlacement = { mode: value.mode }
+    const state = JSON.parse(contents) as Partial<PersistedAppState>
+    const value = state.overlayPlacement
+    if (value && isPresetPlacement(value.mode)) overlayPlacement = { mode: value.mode }
     else if (
-      value.mode === 'custom' &&
+      value?.mode === 'custom' &&
       Number.isFinite(value.x) &&
       Number.isFinite(value.y)
     ) {
       overlayPlacement = { mode: 'custom', x: value.x, y: value.y }
     }
+
+    const stored = state.preferences
+    if (stored) {
+      preferences = {
+        launchAtLogin: typeof stored.launchAtLogin === 'boolean' ? stored.launchAtLogin : false,
+        activationMode: isRecordingActivationMode(stored.activationMode)
+          ? stored.activationMode
+          : 'hold',
+        accelerator: isSupportedAccelerator(stored.accelerator)
+          ? stored.accelerator
+          : defaultAccelerator,
+        holdKey: isHoldKey(stored.holdKey) ? stored.holdKey : defaultHoldKey,
+        microphoneId: typeof stored.microphoneId === 'string' ? stored.microphoneId : '',
+        autoPaste: typeof stored.autoPaste === 'boolean' ? stored.autoPaste : true,
+        keepRecordings:
+          typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : true,
+        showOverlayWhenIdle:
+          typeof stored.showOverlayWhenIdle === 'boolean' ? stored.showOverlayWhenIdle : true,
+        overlayMotion: isOverlayMotion(stored.overlayMotion)
+          ? stored.overlayMotion
+          : 'balanced',
+        smartCorrectionEnabled:
+          typeof stored.smartCorrectionEnabled === 'boolean'
+            ? stored.smartCorrectionEnabled
+            : false
+      }
+    }
+
+    vocabulary = Array.isArray(state.vocabulary)
+      ? state.vocabulary
+          .filter((term): term is string => typeof term === 'string')
+          .map((term) => term.trim())
+          .filter(Boolean)
+          .slice(0, 500)
+      : []
+    history = Array.isArray(state.history)
+      ? state.history.filter(isHistoryItem).slice(0, 100)
+      : []
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.warn('Could not load overlay placement', error)
@@ -473,9 +767,135 @@ async function loadOverlayPlacement(): Promise<void> {
 }
 
 async function saveOverlayPlacement(): Promise<void> {
+  await saveAppState()
+}
+
+async function saveAppState(): Promise<void> {
   const filePath = settingsFilePath()
   await mkdir(path.dirname(filePath), { recursive: true })
-  await writeFile(filePath, JSON.stringify({ overlayPlacement }, null, 2))
+  const state: PersistedAppState = { overlayPlacement, preferences, vocabulary, history }
+  await writeFile(filePath, JSON.stringify(state, null, 2))
+}
+
+async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<AppPreferences> {
+  if (!patch || typeof patch !== 'object') throw new Error('Invalid preferences')
+  const next = { ...preferences }
+
+  if (patch.accelerator !== undefined) {
+    if (!isSupportedAccelerator(patch.accelerator)) throw new Error('Unsupported hotkey')
+    next.accelerator = patch.accelerator
+  }
+  if (patch.activationMode !== undefined) {
+    if (!isRecordingActivationMode(patch.activationMode)) {
+      throw new Error('Unsupported activation mode')
+    }
+    next.activationMode = patch.activationMode
+  }
+  if (patch.holdKey !== undefined) {
+    if (!isHoldKey(patch.holdKey)) throw new Error('Unsupported hold key')
+    next.holdKey = patch.holdKey
+  }
+
+  for (const key of [
+    'launchAtLogin',
+    'autoPaste',
+    'keepRecordings',
+    'showOverlayWhenIdle',
+    'smartCorrectionEnabled'
+  ] as const) {
+    if (patch[key] !== undefined) {
+      if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`)
+      next[key] = patch[key]
+    }
+  }
+
+  if (patch.microphoneId !== undefined) {
+    if (typeof patch.microphoneId !== 'string' || patch.microphoneId.length > 512) {
+      throw new Error('Invalid microphone')
+    }
+    next.microphoneId = patch.microphoneId
+  }
+  if (patch.overlayMotion !== undefined) {
+    if (!isOverlayMotion(patch.overlayMotion)) throw new Error('Invalid overlay motion')
+    next.overlayMotion = patch.overlayMotion
+  }
+
+  if (next.launchAtLogin !== preferences.launchAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: next.launchAtLogin })
+  }
+
+  const activationChanged =
+    next.activationMode !== preferences.activationMode ||
+    next.accelerator !== preferences.accelerator ||
+    next.holdKey !== preferences.holdKey
+  if (activationChanged && !hotkeyCaptureActive) {
+    try {
+      configureRecordingActivation(next)
+    } catch (error) {
+      configureRecordingActivation(preferences)
+      throw error
+    }
+  }
+  return next
+}
+
+function isSupportedAccelerator(value: unknown): value is string {
+  return [
+    defaultAccelerator,
+    'CommandOrControl+Option+Space',
+    'CommandOrControl+Shift+D'
+  ].includes(String(value))
+}
+
+function isOverlayMotion(value: unknown): value is OverlayMotion {
+  return ['calm', 'balanced', 'expressive'].includes(String(value))
+}
+
+function isRecordingActivationMode(
+  value: unknown
+): value is AppPreferences['activationMode'] {
+  return ['toggle', 'hold'].includes(String(value))
+}
+
+function isHoldKey(value: unknown): value is HoldKey {
+  return [
+    'left-control',
+    'right-control',
+    'left-option',
+    'right-option',
+    'left-command',
+    'right-command',
+    'left-shift',
+    'right-shift',
+    'f6',
+    'f7',
+    'f8',
+    'f9',
+    'f10',
+    'f11',
+    'f12'
+  ].includes(String(value))
+}
+
+function sanitizeVocabularyTerm(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('Введите слово или термин')
+  const term = value.replace(/\s+/g, ' ').trim()
+  if (!term || term.length > 80) throw new Error('Термин должен содержать от 1 до 80 символов')
+  if (vocabulary.length >= 500) throw new Error('В словаре может быть не более 500 терминов')
+  return term
+}
+
+function isHistoryItem(value: unknown): value is DictationHistoryItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<DictationHistoryItem>
+  return (
+    typeof item.id === 'string' &&
+    typeof item.createdAt === 'string' &&
+    typeof item.text === 'string' &&
+    typeof item.durationMs === 'number' &&
+    typeof item.latencyMs === 'number' &&
+    ['pasted', 'clipboard', 'skipped'].includes(String(item.insertion))
+  )
 }
 
 function settingsFilePath(): string {
@@ -483,9 +903,29 @@ function settingsFilePath(): string {
 }
 
 function showWindow(): void {
-  if (!mainWindow) return
-  mainWindow.show()
-  mainWindow.focus()
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    const replacement = createWindow()
+    mainWindow = replacement
+    replacement.once('ready-to-show', () => {
+      if (replacement.isDestroyed()) return
+      replacement.show()
+      replacement.focus()
+    })
+    return
+  }
+
+  const window = mainWindow
+  if (window.webContents.isLoadingMainFrame()) {
+    window.once('ready-to-show', () => {
+      if (window.isDestroyed()) return
+      window.show()
+      window.focus()
+    })
+    return
+  }
+
+  window.show()
+  window.focus()
 }
 
 async function requestMicrophonePermission(): Promise<void> {
@@ -495,12 +935,45 @@ async function requestMicrophonePermission(): Promise<void> {
   }
 }
 
+function quitApplication(): void {
+  if (isQuitting) return
+  isQuitting = true
+  disposeApplicationResources()
+
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy()
+  if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy()
+  mainWindow = null
+  overlayWindow = null
+  tray?.destroy()
+  tray = null
+  trayMenu = null
+
+  // This menu action is explicitly a full exit. `app.exit` guarantees that a
+  // background tray or native hook cannot keep the Electron process alive.
+  app.exit(0)
+}
+
+function disposeApplicationResources(): void {
+  if (applicationResourcesDisposed) return
+  applicationResourcesDisposed = true
+  if (hotkeyCaptureSafetyTimer) clearTimeout(hotkeyCaptureSafetyTimer)
+  if (overlayMoveSaveTimer) clearTimeout(overlayMoveSaveTimer)
+  hotkeyCaptureSafetyTimer = null
+  overlayMoveSaveTimer = null
+  globalShortcut.unregisterAll()
+  stopKeyboardHook()
+  endOverlayDrag()
+  asrEngine.dispose?.()
+  smartCorrectionService.dispose()
+}
+
 if (!hasSingleInstanceLock) app.quit()
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
+  if (process.platform === 'win32') app.setAppUserModelId('com.curevoicer.desktop')
   if (process.platform === 'darwin') app.dock?.hide()
-  await loadOverlayPlacement()
+  await loadAppState()
 
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
@@ -518,6 +991,16 @@ app.whenReady().then(async () => {
   )
 
   registerIpc()
+  smartCorrectionService.onStatusChanged((status) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send(IPC.smartCorrectionStatusChanged, status)
+  })
+  asrEngine.onStatusChanged?.((status) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send(IPC.asrStatusChanged, status)
+  })
+  await smartCorrectionService.refreshStatus()
+  await asrEngine.refreshStatus?.()
   mainWindow = createWindow()
   overlayWindow = createOverlayWindow()
   tray = createTray()
@@ -525,23 +1008,35 @@ app.whenReady().then(async () => {
   void asrEngine.prepare?.().catch((error) => {
     console.error('Could not prepare local ASR engine', error)
   })
+  if (preferences.smartCorrectionEnabled) {
+    void smartCorrectionService.prepare().catch((error) => {
+      console.warn('Could not prepare smart correction', error)
+    })
+  }
 
-  if (!globalShortcut.register(accelerator, requestRecordingToggle)) {
-    console.warn(`Could not register global shortcut: ${accelerator}`)
+  try {
+    configureRecordingActivation(preferences)
+  } catch (error) {
+    console.warn('Could not configure recording activation', error)
   }
 
   await requestMicrophonePermission()
 })
 
 app.on('second-instance', () => {
-  // Cure Voicer remains a background tray app. A repeated launch must not
-  // create another overlay or open settings without an explicit tray action.
+  // Cure Voicer remains a background tray app. A repeated launch must
+  // not create another overlay or open settings without an explicit tray action.
+})
+
+app.on('before-quit', () => {
+  // Allow the settings window to close during an actual quit or a dev hot-reload.
+  // Without this guard the close handler hides the window and leaves an orphaned
+  // Electron process holding the single-instance lock.
+  isQuitting = true
 })
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
-  endOverlayDrag()
-  asrEngine.dispose?.()
+  disposeApplicationResources()
 })
 app.on('window-all-closed', () => {
   // Tray apps intentionally stay alive on both desktop platforms.

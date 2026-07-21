@@ -1,7 +1,17 @@
 import { defineConfig } from 'electron-vite'
 
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: 'src/main/index.ts',
+          'llm-worker': 'src/main/llm-worker.ts',
+          'windows-asr-worker': 'src/main/windows-asr-worker.ts'
+        }
+      }
+    }
+  },
   preload: {
     // Sandboxed Electron preload scripts cannot use ESM. Keep this bundle in
     // CommonJS even though the main process uses native ESM.

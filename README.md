@@ -14,10 +14,11 @@ The application currently provides:
 - conversion to mono 16 kHz PCM WAV;
 - local recording storage;
 - local Parakeet TDT 0.6B V3 recognition on Apple Silicon through FluidAudio/Core ML;
+- local Parakeet TDT 0.6B V3 INT8 recognition on Windows x64 through sherpa-onnx;
 - clipboard delivery and automatic paste into the field that had focus.
 
-Audio and transcription stay on the device. FluidAudio downloads the model once
-on the first run and keeps it in its local model cache.
+Audio and transcription stay on the device. The platform-specific runtime downloads
+the Parakeet model once on the first run and keeps it in its local model cache.
 
 ## Development
 
@@ -33,8 +34,19 @@ Run all non-interactive checks:
 npm run check
 ```
 
-The default global shortcut is `CommandOrControl+Shift+Space`. It currently
-works as a toggle: press once to start and once again to finish.
+Build Windows x64 portable and NSIS packages on Windows:
+
+```bash
+npm run pack:win
+```
+
+The same build is available through the `Windows x64 beta` GitHub Actions
+workflow. See [docs/WINDOWS_BETA.md](docs/WINDOWS_BETA.md) for tester setup and
+the QA checklist.
+
+The default activation mode is hold-to-talk: hold right Option on macOS or right
+Ctrl on Windows, speak, and release to transcribe and insert. Toggle mode with
+`CommandOrControl+Shift+Space` is available in settings.
 
 On macOS, automatic paste requires **System Settings → Privacy & Security →
 Accessibility** access for Cure Voicer/Electron. If access has not been granted,
@@ -59,4 +71,5 @@ hide the orb until the next dictation hotkey, or quit Cure Voicer.
 ASR adapters:
 
 - macOS Apple Silicon: implemented with FluidAudio/Core ML and Parakeet TDT 0.6B V3.
-- Windows x64: planned native helper using sherpa-onnx and the ONNX Parakeet model.
+- Windows x64: implemented in an isolated Electron utility process with
+  sherpa-onnx and the SHA-256-verified ONNX Parakeet INT8 model.
