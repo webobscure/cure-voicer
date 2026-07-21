@@ -13,6 +13,9 @@ export const IPC = {
   showOverlayMenu: 'overlay:show-menu',
   overlayPreferencesChanged: 'overlay:preferences-changed',
   updatePreferences: 'settings:update-preferences',
+  requestGlobalInputAccess: 'permissions:request-global-input',
+  openSystemSettings: 'permissions:open-system-settings',
+  completeOnboarding: 'onboarding:complete',
   setHotkeyCapture: 'settings:set-hotkey-capture',
   addVocabularyTerm: 'settings:add-vocabulary-term',
   removeVocabularyTerm: 'settings:remove-vocabulary-term',
@@ -92,6 +95,8 @@ export type HoldKey =
 
 export type RecordingCommand = 'toggle' | 'start' | 'stop'
 
+export type PermissionSettingsKind = 'microphone' | 'accessibility'
+
 export interface AppPreferences {
   launchAtLogin: boolean
   activationMode: RecordingActivationMode
@@ -103,6 +108,7 @@ export interface AppPreferences {
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
   smartCorrectionEnabled: boolean
+  onboardingCompleted: boolean
 }
 
 export interface DictationHistoryItem {
@@ -152,6 +158,9 @@ export interface CureVoicerApi {
   finishRecording(payload: PcmRecordingPayload): Promise<RecordingResult>
   setOverlayPlacement(mode: Exclude<OverlayPlacementMode, 'custom'>): Promise<OverlayPlacement>
   updatePreferences(patch: Partial<AppPreferences>): Promise<AppPreferences>
+  requestGlobalInputAccess(): Promise<boolean>
+  openSystemSettings(kind: PermissionSettingsKind): Promise<void>
+  completeOnboarding(): Promise<AppPreferences>
   setHotkeyCapture(active: boolean): Promise<boolean>
   addVocabularyTerm(term: string): Promise<string[]>
   removeVocabularyTerm(term: string): Promise<string[]>

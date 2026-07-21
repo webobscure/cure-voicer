@@ -6,6 +6,7 @@ import type {
   RecordingCommand,
   OverlayPlacement,
   OverlayPlacementMode,
+  PermissionSettingsKind,
   PcmRecordingPayload,
   RecordingState,
   SmartCorrectionStatus
@@ -23,6 +24,10 @@ const api: CureVoicerApi = {
     ipcRenderer.invoke(IPC.setOverlayPlacement, mode),
   updatePreferences: (patch: Partial<AppPreferences>) =>
     ipcRenderer.invoke(IPC.updatePreferences, patch),
+  requestGlobalInputAccess: () => ipcRenderer.invoke(IPC.requestGlobalInputAccess),
+  openSystemSettings: (kind: PermissionSettingsKind) =>
+    ipcRenderer.invoke(IPC.openSystemSettings, kind),
+  completeOnboarding: () => ipcRenderer.invoke(IPC.completeOnboarding),
   setHotkeyCapture: (active: boolean) =>
     ipcRenderer.invoke(IPC.setHotkeyCapture, active),
   addVocabularyTerm: (term: string) => ipcRenderer.invoke(IPC.addVocabularyTerm, term),

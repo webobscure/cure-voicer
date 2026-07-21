@@ -1,4 +1,6 @@
 const TARGET_SAMPLE_RATE = 16_000
+const MICROPHONE_TIMEOUT_MS = 8_000
+const AUDIO_CONTEXT_TIMEOUT_MS = 5_000
 
 export class AudioRecorder {
   private context: AudioContext | null = null
@@ -15,7 +17,8 @@ export class AudioRecorder {
     if (this.context) throw new Error('Recorder is already running')
 
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      let microphoneRequestTimedOut = false
+      const microphoneRequest = navigator.mediaDevices.getUserMedia({
         audio: {
           ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
           channelCount: 1,
@@ -24,11 +27,40 @@ export class AudioRecorder {
           autoGainControl: true
         }
       })
+      void microphoneRequest.then(
+        (stream) => {
+          if (microphoneRequestTimedOut) {
+            stream.getTracks().forEach((track) => track.stop())
+          }
+        },
+        () => undefined
+      )
+      try {
+        this.stream = await withTimeout(
+          microphoneRequest,
+          MICROPHONE_TIMEOUT_MS,
+          'Микрофон не ответил. Проверьте разрешение в системных настройках.'
+        )
+      } catch (error) {
+        microphoneRequestTimedOut = true
+        throw error
+      }
 
       this.context = new AudioContext({ latencyHint: 'interactive' })
       this.sourceSampleRate = this.context.sampleRate
-      await this.context.audioWorklet.addModule(
-        new URL('./audio-recorder-worklet.js', window.location.href).toString()
+      if (this.context.state === 'suspended') {
+        await withTimeout(
+          this.context.resume(),
+          AUDIO_CONTEXT_TIMEOUT_MS,
+          'Не удалось активировать аудиосистему.'
+        )
+      }
+      await withTimeout(
+        this.context.audioWorklet.addModule(
+          new URL('./audio-recorder-worklet.js', window.location.href).toString()
+        ),
+        AUDIO_CONTEXT_TIMEOUT_MS,
+        'Не удалось запустить обработку аудио.'
       )
 
       this.source = this.context.createMediaStreamSource(this.stream)
@@ -80,6 +112,22 @@ export class AudioRecorder {
     this.silentOutput = null
     this.chunks = []
     this.onLevel(0)
+  }
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 

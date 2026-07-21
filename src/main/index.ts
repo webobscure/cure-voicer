@@ -10,6 +10,7 @@ import {
   nativeImage,
   screen,
   session,
+  shell,
   systemPreferences,
   Tray
 } from 'electron'
@@ -40,6 +41,9 @@ const defaultAccelerator = 'CommandOrControl+Shift+Space'
 const defaultHoldKey: HoldKey =
   process.platform === 'darwin' ? 'right-option' : 'right-control'
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
+// Dictation starts from a global key while the settings window is hidden, so
+// Chromium must allow the recorder's AudioContext without a renderer click.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 const asrEngine = createAsrEngine({
   windowsWorkerPath: path.join(currentDirectory, 'windows-asr-worker.js'),
   windowsModelsDirectory: path.join(app.getPath('userData'), 'models', 'parakeet-v3-onnx')
@@ -66,7 +70,8 @@ let preferences: AppPreferences = {
   keepRecordings: true,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
-  smartCorrectionEnabled: false
+  smartCorrectionEnabled: false,
+  onboardingCompleted: false
 }
 let vocabulary: string[] = []
 let history: DictationHistoryItem[] = []
@@ -176,7 +181,9 @@ function createOverlayWindow(): BrowserWindow {
     window.webContents.send(IPC.overlayState, currentState)
     window.webContents.send(IPC.overlayPreferencesChanged, preferences)
     positionOverlay(window)
-    if (preferences.showOverlayWhenIdle) window.showInactive()
+    if (preferences.onboardingCompleted && preferences.showOverlayWhenIdle) {
+      window.showInactive()
+    }
   })
 
   window.on('move', () => {
@@ -243,9 +250,13 @@ function rebuildTrayMenu(appTray = tray): void {
 
   trayMenu = Menu.buildFromTemplate([
     {
-      label: stateLabels[currentState],
-      enabled: currentState !== 'starting' && currentState !== 'transcribing',
-      click: requestRecordingToggle
+      label: preferences.onboardingCompleted
+        ? stateLabels[currentState]
+        : 'Завершить настройку…',
+      enabled:
+        !preferences.onboardingCompleted ||
+        (currentState !== 'starting' && currentState !== 'transcribing'),
+      click: preferences.onboardingCompleted ? requestRecordingToggle : showWindow
     },
     { type: 'separator' },
     { label: 'Настройки…', click: showWindow },
@@ -352,6 +363,44 @@ function registerIpc(): void {
       return preferences
     }
   )
+
+  ipcMain.handle(IPC.requestGlobalInputAccess, (event) => {
+    assertTrustedSender(event)
+    if (process.platform !== 'darwin') return true
+    systemPreferences.isTrustedAccessibilityClient(true)
+    return isGlobalInputAvailable()
+  })
+
+  ipcMain.handle(IPC.openSystemSettings, async (event, kind: unknown) => {
+    assertTrustedSender(event)
+    if (kind !== 'microphone' && kind !== 'accessibility') {
+      throw new Error('Invalid permission settings kind')
+    }
+    const target =
+      process.platform === 'darwin'
+        ? kind === 'microphone'
+          ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+          : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+        : kind === 'microphone'
+          ? 'ms-settings:privacy-microphone'
+          : 'ms-settings:easeofaccess'
+    await shell.openExternal(target)
+  })
+
+  ipcMain.handle(IPC.completeOnboarding, async (event) => {
+    assertTrustedSender(event)
+    preferences = { ...preferences, onboardingCompleted: true }
+    await saveAppState()
+    try {
+      configureRecordingActivation(preferences)
+    } catch (error) {
+      console.warn('Could not configure recording activation after onboarding', error)
+    }
+    overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
+    updateOverlayState('idle')
+    rebuildTrayMenu()
+    return preferences
+  })
 
   ipcMain.handle(IPC.setHotkeyCapture, (event, active: boolean) => {
     assertTrustedSender(event)
@@ -464,6 +513,10 @@ function validateRecordingPayload(payload: PcmRecordingPayload): void {
 }
 
 function requestRecordingToggle(): void {
+  if (!preferences.onboardingCompleted) {
+    showWindow()
+    return
+  }
   sendRecordingCommand('toggle')
 }
 
@@ -509,8 +562,7 @@ function configureRecordingActivation(nextPreferences: AppPreferences): void {
       process.platform === 'darwin' &&
       !systemPreferences.isTrustedAccessibilityClient(false)
     ) {
-      systemPreferences.isTrustedAccessibilityClient(true)
-      if (!systemPreferences.isTrustedAccessibilityClient(false)) return
+      return
     }
     activeHoldKeyCode = holdKeyCode(nextPreferences.holdKey)
     uIOhook.on('keydown', handleGlobalKeyDown)
@@ -580,6 +632,10 @@ function holdKeyCode(key: HoldKey): number {
 
 function updateOverlayState(state: RecordingState): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
+  if (!preferences.onboardingCompleted) {
+    overlayWindow.hide()
+    return
+  }
 
   if (state !== 'idle') overlayHiddenUntilRecording = false
   if (
@@ -745,6 +801,10 @@ async function loadAppState(): Promise<void> {
         smartCorrectionEnabled:
           typeof stored.smartCorrectionEnabled === 'boolean'
             ? stored.smartCorrectionEnabled
+            : false,
+        onboardingCompleted:
+          typeof stored.onboardingCompleted === 'boolean'
+            ? stored.onboardingCompleted
             : false
       }
     }
@@ -801,7 +861,8 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     'autoPaste',
     'keepRecordings',
     'showOverlayWhenIdle',
-    'smartCorrectionEnabled'
+    'smartCorrectionEnabled',
+    'onboardingCompleted'
   ] as const) {
     if (patch[key] !== undefined) {
       if (typeof patch[key] !== 'boolean') throw new Error(`Invalid ${key}`)
@@ -828,7 +889,7 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     next.activationMode !== preferences.activationMode ||
     next.accelerator !== preferences.accelerator ||
     next.holdKey !== preferences.holdKey
-  if (activationChanged && !hotkeyCaptureActive) {
+  if (activationChanged && next.onboardingCompleted && !hotkeyCaptureActive) {
     try {
       configureRecordingActivation(next)
     } catch (error) {
@@ -928,13 +989,6 @@ function showWindow(): void {
   window.focus()
 }
 
-async function requestMicrophonePermission(): Promise<void> {
-  if (process.platform !== 'darwin') return
-  if (systemPreferences.getMediaAccessStatus('microphone') === 'not-determined') {
-    await systemPreferences.askForMediaAccess('microphone')
-  }
-}
-
 function quitApplication(): void {
   if (isQuitting) return
   isQuitting = true
@@ -1002,6 +1056,14 @@ app.whenReady().then(async () => {
   await smartCorrectionService.refreshStatus()
   await asrEngine.refreshStatus?.()
   mainWindow = createWindow()
+  if (!preferences.onboardingCompleted) {
+    const onboardingWindow = mainWindow
+    onboardingWindow.once('ready-to-show', () => {
+      if (onboardingWindow.isDestroyed()) return
+      onboardingWindow.show()
+      onboardingWindow.focus()
+    })
+  }
   overlayWindow = createOverlayWindow()
   tray = createTray()
 
@@ -1014,13 +1076,13 @@ app.whenReady().then(async () => {
     })
   }
 
-  try {
-    configureRecordingActivation(preferences)
-  } catch (error) {
-    console.warn('Could not configure recording activation', error)
+  if (preferences.onboardingCompleted) {
+    try {
+      configureRecordingActivation(preferences)
+    } catch (error) {
+      console.warn('Could not configure recording activation', error)
+    }
   }
-
-  await requestMicrophonePermission()
 })
 
 app.on('second-instance', () => {
