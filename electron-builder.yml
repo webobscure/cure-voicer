@@ -1,6 +1,10 @@
 appId: com.curevoicer.desktop
 productName: Cure Voicer
 asar: true
+# All native runtime dependencies ship N-API/prebuilt Windows x64 binaries.
+# Rebuilding them is unnecessary and currently breaks on the Windows 2026
+# runner because uiohook's node-gyp cannot detect Visual Studio 18 yet.
+npmRebuild: false
 
 directories:
   output: release
