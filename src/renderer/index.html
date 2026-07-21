@@ -92,19 +92,45 @@
             <div class="group-label">Быстрый доступ</div>
             <div class="settings-group">
               <div class="setting-row">
+                <div class="setting-symbol orange"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 9-13h-6z"></path></svg></div>
+                <div class="setting-copy"><strong>Способ запуска</strong><span>Удерживать клавишу или нажимать повторно</span></div>
+                <div class="mode-segmented" id="activationModeControl" role="group" aria-label="Способ запуска диктовки">
+                  <button type="button" data-activation-mode="hold" aria-pressed="true">Удержание</button>
+                  <button type="button" data-activation-mode="toggle" aria-pressed="false">Нажатие</button>
+                </div>
+              </div>
+              <div class="setting-row" id="holdKeyRow">
+                <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><path d="M7 4h10a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"></path><path d="M8 12h8"></path></svg></div>
+                <div class="setting-copy"><strong>Клавиша удержания</strong><span id="holdKeyHint" role="status" aria-live="polite">Нажмите справа и задайте удобную клавишу</span></div>
+                <button class="key-capture-button" id="holdKeyButton" type="button" aria-label="Изменить клавишу удержания">
+                  <kbd id="holdKeyGlyph">⌥</kbd><span id="holdKeyButtonLabel">Правый Option</span>
+                </button>
+              </div>
+              <div class="setting-row">
                 <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"></path></svg></div>
-                <div class="setting-copy"><strong>Горячая клавиша</strong><span>Начать или завершить диктовку</span></div>
-                <kbd id="hotkeyLabel">⌘ ⇧ Space</kbd>
+                <div class="setting-copy"><strong>Комбинация клавиш</strong><span>Для режима запуска по нажатию</span></div>
+                <select class="compact-select" id="hotkeySelect" aria-label="Горячая клавиша">
+                  <option value="CommandOrControl+Shift+Space">⌘ ⇧ Space</option>
+                  <option value="CommandOrControl+Option+Space">⌘ ⌥ Space</option>
+                  <option value="CommandOrControl+Shift+D">⌘ ⇧ D</option>
+                </select>
               </div>
               <div class="setting-row">
                 <div class="setting-symbol cyan"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></div>
-                <div class="setting-copy"><strong>Микрофон</strong><span>Системное устройство по умолчанию</span></div>
-                <span class="row-value">Автоматически</span>
+                <div class="setting-copy"><strong>Микрофон</strong><span>Устройство для записи диктовки</span></div>
+                <select class="compact-select device-select" id="microphoneSelect" aria-label="Микрофон">
+                  <option value="">Системный</option>
+                </select>
               </div>
               <div class="setting-row">
                 <div class="setting-symbol purple"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM9 9h6v6H9z"></path></svg></div>
-                <div class="setting-copy"><strong>Вставка текста</strong><span>В активное поле после распознавания</span></div>
-                <span class="row-value positive">Включена</span>
+                <div class="setting-copy"><strong>Вставка текста</strong><span>Автоматически вставлять в активное поле</span></div>
+                <label class="toggle-control"><input id="autoPasteToggle" type="checkbox" /><span></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-symbol green"><svg viewBox="0 0 24 24"><path d="M12 3v5M5.6 5.6l3.5 3.5M3 12h5M5.6 18.4l3.5-3.5M12 21v-5M18.4 18.4l-3.5-3.5M21 12h-5M18.4 5.6l-3.5 3.5"></path></svg></div>
+                <div class="setting-copy"><strong>Запуск при входе</strong><span>Работать в фоне после включения компьютера</span></div>
+                <label class="toggle-control"><input id="launchAtLoginToggle" type="checkbox" /><span></span></label>
               </div>
             </div>
 
@@ -145,25 +171,93 @@
                 <span class="row-value positive">Включено</span>
               </div>
             </div>
+
+            <div class="group-label">Поведение</div>
+            <div class="settings-group">
+              <div class="setting-row">
+                <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M8 12h8M12 8v8"></path></svg></div>
+                <div class="setting-copy"><strong>Показывать в ожидании</strong><span>Оставлять неактивную сферу на экране</span></div>
+                <label class="toggle-control"><input id="showOverlayToggle" type="checkbox" /><span></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-symbol purple"><svg viewBox="0 0 24 24"><path d="M4 15c3-8 5 5 8-3s5 5 8-3"></path></svg></div>
+                <div class="setting-copy"><strong>Движение сферы</strong><span>Насколько активно индикатор реагирует на голос</span></div>
+                <select class="compact-select" id="motionSelect" aria-label="Движение сферы">
+                  <option value="calm">Спокойно</option>
+                  <option value="balanced">Баланс</option>
+                  <option value="expressive">Живо</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <div class="setting-symbol cyan"><svg viewBox="0 0 24 24"><path d="M5 7h14v12H5zM8 7V4h8v3M9 11h6"></path></svg></div>
+                <div class="setting-copy"><strong>Хранить аудиозаписи</strong><span>Сохранять локальные WAV после распознавания</span></div>
+                <label class="toggle-control"><input id="keepRecordingsToggle" type="checkbox" /><span></span></label>
+              </div>
+            </div>
           </section>
 
           <section class="settings-pane" data-pane="models" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon indigo"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"></rect><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"></path></svg></div>
+              <div><h2>Локальное распознавание</h2><p>Модель работает на устройстве — аудио не отправляется в облако</p></div>
+            </div>
+            <div class="group-label">Активная модель</div>
             <div class="model-card">
               <div class="model-card-icon">P3</div>
-              <div><strong>Parakeet TDT 0.6B V3</strong><span>Локально · 25 языков · Core ML / ONNX</span></div>
-              <span class="coming-badge">Следующий этап</span>
+              <div><strong>Parakeet TDT 0.6B V3</strong><span id="asrModelDetail">Локально · 25 языков · Core ML / ONNX</span><progress id="asrModelProgress" max="1" value="0" hidden></progress></div>
+              <button class="model-retry" id="asrRetryButton" type="button" hidden>Повторить</button>
+              <span class="model-badge" id="modelStatusBadge">Активна</span>
+            </div>
+            <div class="group-label">Коррекция текста</div>
+            <div class="settings-group">
+              <div class="setting-row smart-correction-row">
+                <div class="setting-symbol indigo"><svg viewBox="0 0 24 24"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"></path></svg></div>
+                <div class="setting-copy">
+                  <strong>Умная коррекция</strong>
+                  <span id="smartCorrectionDetail">Qwen исправляет смешанную русско-английскую речь</span>
+                  <progress id="smartCorrectionProgress" max="1" value="0" hidden></progress>
+                </div>
+                <label class="toggle-control"><input id="smartCorrectionToggle" type="checkbox" /><span></span></label>
+              </div>
+              <div class="setting-row compact-row">
+                <div class="setting-copy"><strong>Qwen3.5-0.8B Q8_0</strong><span>Локальная модель · около 834 МБ</span></div>
+                <span class="row-value" id="smartCorrectionStatusValue">Не загружена</span>
+              </div>
+            </div>
+            <div class="group-label">Информация</div>
+            <div class="settings-group">
+              <div class="setting-row compact-row"><div class="setting-copy"><strong>Движок</strong><span id="modelEngineValue">Подготовка…</span></div><span class="status-dot"></span></div>
+              <div class="setting-row compact-row"><div class="setting-copy"><strong>Обработка</strong><span id="modelRuntimeValue">На этом компьютере</span></div><span class="row-value positive">Локально</span></div>
+              <div class="setting-row compact-row"><div class="setting-copy"><strong>Язык</strong><span>Русский, английский и смешанная речь</span></div><span class="row-value">Авто</span></div>
             </div>
           </section>
 
           <section class="settings-pane" data-pane="vocabulary" hidden>
-            <div class="empty-pane-icon purple"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h6"></path></svg></div>
-            <h2>Персональный словарь</h2>
-            <p>Добавляйте имена, названия продуктов и профессиональные термины для более точной диктовки.</p>
+            <div class="section-intro">
+              <div class="empty-pane-icon purple"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h6"></path></svg></div>
+              <div><h2>Персональный словарь</h2><p>Задайте правильное написание имён, продуктов и терминов</p></div>
+            </div>
+            <form class="vocabulary-form" id="vocabularyForm">
+              <input id="vocabularyInput" maxlength="80" autocomplete="off" placeholder="Например, Cure Voicer или Parakeet" />
+              <button type="submit">Добавить</button>
+            </form>
+            <div class="inline-message" id="vocabularyMessage" role="status"></div>
+            <div class="group-label vocabulary-label">Сохранённые термины <span id="vocabularyCount">0</span></div>
+            <div class="vocabulary-list settings-group" id="vocabularyList"></div>
           </section>
 
           <section class="settings-pane" data-pane="history" hidden>
-            <div class="group-label">Последняя диктовка</div>
-            <div class="history-card">
+            <div class="history-toolbar">
+              <div><strong>Локальная история</strong><span id="historyCount">Нет записей</span></div>
+              <button class="danger-button" id="clearHistoryButton" type="button">Очистить</button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+            <div class="history-empty" id="historyEmpty">
+              <div class="empty-pane-icon blue"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg></div>
+              <h2>История пока пуста</h2>
+              <p>Здесь появятся последние диктовки. Всё хранится только на этом компьютере.</p>
+            </div>
+            <div class="history-card latest-result" id="latestResultCard" hidden>
               <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><path d="M7 10v4M10.5 7v10M14 9v6M17.5 5v14"></path></svg></div>
               <div><p id="resultText">Здесь появится распознанный текст.</p><span id="resultPath"></span></div>
             </div>

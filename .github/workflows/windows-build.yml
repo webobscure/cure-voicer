@@ -1,0 +1,75 @@
+name: Windows x64 beta
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source
+        run: npm run check
+
+      - name: Verify Windows native runtimes
+        run: node -e "require('sherpa-onnx-node'); require('uiohook-napi'); console.log('Windows native runtimes loaded')"
+
+      - name: Build portable and NSIS packages
+        run: npm run pack:win
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path 'release/*-portable.exe', 'release/*-setup.exe' | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Set-Content release/SHA256SUMS.txt
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: cure-voicer-windows-x64
+          path: |
+            release/*-portable.exe
+            release/*-setup.exe
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish tagged beta to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem -Path 'release/*-portable.exe', 'release/*-setup.exe' | ForEach-Object FullName
+          $files += (Resolve-Path release/SHA256SUMS.txt).Path
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME $files --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME $files --generate-notes --prerelease
+          }

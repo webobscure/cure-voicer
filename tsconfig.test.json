@@ -12,7 +12,13 @@
   },
   "include": [
     "tests/**/*.ts",
+    "src/shared/asr.ts",
     "src/main/audio/wav.ts",
-    "src/renderer/audio-recorder.ts"
+    "src/renderer/audio-recorder.ts",
+    "src/shared/contracts.ts",
+    "src/shared/platform-shortcuts.ts",
+    "src/shared/smart-correction.ts",
+    "src/shared/transcript-postprocessor.ts",
+    "src/shared/vocabulary.ts"
   ]
 }

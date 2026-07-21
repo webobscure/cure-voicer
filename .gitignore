@@ -1,6 +1,7 @@
 node_modules/
 out/
 dist/
+release/
 coverage/
 native/macos-asr/.build/
 .swiftpm/

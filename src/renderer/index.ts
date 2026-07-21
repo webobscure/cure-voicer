@@ -1,8 +1,14 @@
 import type {
+  AsrStatus,
+  AppPreferences,
   CureVoicerApi,
+  DictationHistoryItem,
+  HoldKey,
+  OverlayMotion,
   OverlayPlacement,
   OverlayPlacementMode,
-  RecordingState
+  RecordingState,
+  SmartCorrectionStatus
 } from '../shared/contracts'
 import { AudioRecorder } from './audio-recorder'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
@@ -15,7 +21,6 @@ const statusDetail = getElement('statusDetail')
 const resultText = getElement('resultText')
 const resultPath = getElement('resultPath')
 const engineLabel = getElement('engineLabel')
-const hotkeyLabel = getElement('hotkeyLabel')
 const versionLabel = getElement('versionLabel')
 const pageTitle = getElement('pageTitle')
 const pageSubtitle = getElement('pageSubtitle')
@@ -27,6 +32,40 @@ const placementButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-placement]')
 )
 const miniBrandLogo = document.querySelector<HTMLImageElement>('.mini-brand-logo')
+const activationModeButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-activation-mode]')
+)
+const holdKeyButton = getElement<HTMLButtonElement>('holdKeyButton')
+const holdKeyGlyph = getElement('holdKeyGlyph')
+const holdKeyButtonLabel = getElement('holdKeyButtonLabel')
+const holdKeyHint = getElement('holdKeyHint')
+const hotkeySelect = getElement<HTMLSelectElement>('hotkeySelect')
+const microphoneSelect = getElement<HTMLSelectElement>('microphoneSelect')
+const autoPasteToggle = getElement<HTMLInputElement>('autoPasteToggle')
+const launchAtLoginToggle = getElement<HTMLInputElement>('launchAtLoginToggle')
+const showOverlayToggle = getElement<HTMLInputElement>('showOverlayToggle')
+const keepRecordingsToggle = getElement<HTMLInputElement>('keepRecordingsToggle')
+const motionSelect = getElement<HTMLSelectElement>('motionSelect')
+const modelEngineValue = getElement('modelEngineValue')
+const modelRuntimeValue = getElement('modelRuntimeValue')
+const modelStatusBadge = getElement('modelStatusBadge')
+const asrModelDetail = getElement('asrModelDetail')
+const asrModelProgress = getElement<HTMLProgressElement>('asrModelProgress')
+const asrRetryButton = getElement<HTMLButtonElement>('asrRetryButton')
+const smartCorrectionToggle = getElement<HTMLInputElement>('smartCorrectionToggle')
+const smartCorrectionDetail = getElement('smartCorrectionDetail')
+const smartCorrectionStatusValue = getElement('smartCorrectionStatusValue')
+const smartCorrectionProgress = getElement<HTMLProgressElement>('smartCorrectionProgress')
+const vocabularyForm = getElement<HTMLFormElement>('vocabularyForm')
+const vocabularyInput = getElement<HTMLInputElement>('vocabularyInput')
+const vocabularyList = getElement('vocabularyList')
+const vocabularyCount = getElement('vocabularyCount')
+const vocabularyMessage = getElement('vocabularyMessage')
+const historyList = getElement('historyList')
+const historyEmpty = getElement('historyEmpty')
+const historyCount = getElement('historyCount')
+const clearHistoryButton = getElement<HTMLButtonElement>('clearHistoryButton')
+const latestResultCard = getElement('latestResultCard')
 
 if (miniBrandLogo) miniBrandLogo.src = brandLogoUrl
 
@@ -34,20 +73,45 @@ let state: RecordingState = 'idle'
 let recordingStartedAt = 0
 let recordingTimer: number | null = null
 let lastAudioLevelSentAt = 0
-const recorder = new AudioRecorder(updateLevel)
-
-const stateCopy: Record<RecordingState, [string, string]> = {
-  idle: ['Готов к диктовке', 'Нажмите горячую клавишу в любом поле ввода'],
-  starting: ['Подключаем микрофон…', 'При первом запуске подтвердите разрешение'],
-  recording: ['Слушаю', '00:00 · Нажмите, чтобы закончить'],
-  transcribing: ['Распознаю речь…', 'Обработка выполняется на устройстве'],
-  error: ['Не удалось записать', 'Проверьте доступ к микрофону и повторите']
+let stopRequestedWhileStarting = false
+let recordingStartInProgress = false
+let appPlatform: NodeJS.Platform = 'darwin'
+let globalInputAvailable = true
+let isCapturingHoldKey = false
+let holdKeyCaptureTimer: number | null = null
+let preferences: AppPreferences = {
+  launchAtLogin: false,
+  activationMode: 'hold',
+  accelerator: 'CommandOrControl+Shift+Space',
+  holdKey: 'right-option',
+  microphoneId: '',
+  autoPaste: true,
+  keepRecordings: true,
+  showOverlayWhenIdle: true,
+  overlayMotion: 'balanced',
+  smartCorrectionEnabled: false
 }
+let smartCorrectionStatus: SmartCorrectionStatus = {
+  state: 'not-downloaded',
+  progress: 0,
+  modelName: 'Qwen3.5-0.8B Q8_0',
+  modelSizeBytes: 834_000_000
+}
+let asrStatus: AsrStatus = {
+  state: 'loading',
+  progress: 0,
+  engine: 'Подготовка…',
+  modelName: 'Parakeet TDT 0.6B V3',
+  modelSizeBytes: 0
+}
+let vocabulary: string[] = []
+let history: DictationHistoryItem[] = []
+const recorder = new AudioRecorder(updateLevel)
 
 async function setState(nextState: RecordingState): Promise<void> {
   state = nextState
   document.body.dataset.state = nextState
-  const [label, detail] = stateCopy[nextState]
+  const [label, detail] = getStateCopy(nextState)
   statusLabel.textContent = label
   statusDetail.textContent = detail
   recordButton.disabled = nextState === 'starting' || nextState === 'transcribing'
@@ -67,16 +131,46 @@ async function toggleRecording(): Promise<void> {
     return
   }
 
+  await startRecording()
+}
+
+async function startRecording(): Promise<void> {
+  if (state === 'starting' || state === 'recording' || state === 'transcribing') return
+
   try {
+    stopRequestedWhileStarting = false
+    recordingStartInProgress = true
     await setState('starting')
-    await recorder.start()
+    await recorder.start(preferences.microphoneId)
     recordingStartedAt = performance.now()
     resultText.textContent = 'Идёт запись…'
     resultPath.textContent = ''
     await setState('recording')
+    recordingStartInProgress = false
     startRecordingTimer()
+    if (stopRequestedWhileStarting) {
+      stopRequestedWhileStarting = false
+      await finishRecording()
+    }
   } catch (error) {
+    recordingStartInProgress = false
     showError(error)
+  }
+}
+
+async function handleRecordingCommand(command: 'toggle' | 'start' | 'stop'): Promise<void> {
+  if (command === 'toggle') {
+    await toggleRecording()
+    return
+  }
+  if (command === 'start') {
+    await startRecording()
+    return
+  }
+  if (recordingStartInProgress || state === 'starting') {
+    stopRequestedWhileStarting = true
+  } else if (state === 'recording') {
+    await finishRecording()
   }
 }
 
@@ -89,7 +183,7 @@ async function finishRecording(): Promise<void> {
 
     if (samples.length < 4_800) {
       resultText.textContent =
-        'Запись слишком короткая. Произнесите фразу перед повторным нажатием.'
+        'Запись слишком короткая. Подержите клавишу чуть дольше и произнесите фразу.'
       resultPath.textContent = ''
       await setState('idle')
       return
@@ -120,6 +214,11 @@ async function finishRecording(): Promise<void> {
           ? 'Текст оставлен в буфере обмена'
           : 'Без вставки'
     resultPath.textContent = `${deliveryLabel} · ${result.recordingPath}`
+    if (api) {
+      const info = await api.getAppInfo()
+      history = info.history
+      renderHistory()
+    }
     await setState('idle')
   } catch (error) {
     showError(error)
@@ -154,7 +253,11 @@ function startRecordingTimer(): void {
     const elapsedSeconds = Math.floor((performance.now() - recordingStartedAt) / 1000)
     const minutes = Math.floor(elapsedSeconds / 60)
     const seconds = elapsedSeconds % 60
-    statusDetail.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} · Нажмите, чтобы закончить`
+    const finishHint =
+      preferences.activationMode === 'hold'
+        ? `Отпустите ${formatHoldKey(preferences.holdKey, appPlatform)}`
+        : 'Нажмите, чтобы закончить'
+    statusDetail.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} · ${finishHint}`
   }
 
   renderElapsedTime()
@@ -220,11 +323,387 @@ function renderOverlayPlacement(placement: OverlayPlacement): void {
   placementHint.textContent = labels[placement.mode]
 }
 
+function renderPreferences(): void {
+  activationModeButtons.forEach((button) => {
+    button.setAttribute(
+      'aria-pressed',
+      String(button.dataset.activationMode === preferences.activationMode)
+    )
+  })
+  hotkeySelect.value = preferences.accelerator
+  holdKeyButton.disabled = preferences.activationMode !== 'hold'
+  holdKeyButton.classList.toggle(
+    'needs-permission',
+    preferences.activationMode === 'hold' && !globalInputAvailable
+  )
+  holdKeyGlyph.textContent = holdKeyGlyphFor(preferences.holdKey)
+  holdKeyButtonLabel.textContent = formatHoldKey(preferences.holdKey, appPlatform)
+  if (!isCapturingHoldKey) {
+    holdKeyHint.textContent =
+      preferences.activationMode === 'hold'
+        ? globalInputAvailable
+          ? 'Нажмите справа, затем нажмите нужную клавишу'
+          : 'Разрешите Cure Voicer в macOS → Универсальный доступ'
+        : 'Доступно в режиме удержания'
+  }
+  hotkeySelect.disabled = preferences.activationMode !== 'toggle'
+  microphoneSelect.value = preferences.microphoneId
+  autoPasteToggle.checked = preferences.autoPaste
+  launchAtLoginToggle.checked = preferences.launchAtLogin
+  showOverlayToggle.checked = preferences.showOverlayWhenIdle
+  keepRecordingsToggle.checked = preferences.keepRecordings
+  motionSelect.value = preferences.overlayMotion
+  smartCorrectionToggle.checked = preferences.smartCorrectionEnabled
+  renderAsrStatus()
+  renderSmartCorrectionStatus()
+  renderStateCopy()
+}
+
+function renderAsrStatus(): void {
+  const percent = Math.round(asrStatus.progress * 100)
+  const busy = asrStatus.state === 'downloading' || asrStatus.state === 'loading'
+  asrModelProgress.hidden = !busy
+  asrModelProgress.value = asrStatus.progress
+  asrRetryButton.hidden = asrStatus.state !== 'error'
+  asrRetryButton.disabled = busy
+  modelEngineValue.textContent = asrStatus.engine
+
+  switch (asrStatus.state) {
+    case 'downloading':
+      modelStatusBadge.textContent = `${percent}%`
+      asrModelDetail.textContent = `Загрузка Windows-модели · ${percent}% из 670 МБ`
+      break
+    case 'loading':
+      modelStatusBadge.textContent = 'Подготовка'
+      asrModelDetail.textContent = 'Загрузка модели в память…'
+      break
+    case 'ready':
+      modelStatusBadge.textContent = 'Активна'
+      asrModelDetail.textContent = 'Локально · 25 языков · готова к диктовке'
+      break
+    case 'downloaded':
+      modelStatusBadge.textContent = 'Загружена'
+      asrModelDetail.textContent = 'Модель проверена и готова к запуску'
+      break
+    case 'error':
+      modelStatusBadge.textContent = 'Ошибка'
+      asrModelDetail.textContent = asrStatus.error ?? 'Не удалось подготовить модель'
+      break
+    default:
+      modelStatusBadge.textContent = 'Не загружена'
+      asrModelDetail.textContent = 'При первом запуске загрузится локальная модель · 670 МБ'
+  }
+}
+
+function renderSmartCorrectionStatus(): void {
+  const percent = Math.round(smartCorrectionStatus.progress * 100)
+  const busy =
+    smartCorrectionStatus.state === 'downloading' ||
+    smartCorrectionStatus.state === 'loading'
+  smartCorrectionToggle.disabled = busy
+  smartCorrectionProgress.hidden = !busy
+  smartCorrectionProgress.value = smartCorrectionStatus.progress
+
+  switch (smartCorrectionStatus.state) {
+    case 'downloading':
+      smartCorrectionDetail.textContent = `Загрузка локальной модели · ${percent}%`
+      smartCorrectionStatusValue.textContent = `${percent}%`
+      break
+    case 'loading':
+      smartCorrectionDetail.textContent = 'Запускаем модель на этом компьютере…'
+      smartCorrectionStatusValue.textContent = 'Подготовка'
+      break
+    case 'ready':
+      smartCorrectionDetail.textContent = preferences.smartCorrectionEnabled
+        ? 'Исправляет технические термины и смешанную речь локально'
+        : 'Модель загружена и готова к включению'
+      smartCorrectionStatusValue.textContent = preferences.smartCorrectionEnabled
+        ? 'Активна'
+        : 'Готова'
+      break
+    case 'downloaded':
+      smartCorrectionDetail.textContent = 'Модель загружена и готова к запуску'
+      smartCorrectionStatusValue.textContent = 'Загружена'
+      break
+    case 'error':
+      smartCorrectionDetail.textContent =
+        smartCorrectionStatus.error ?? 'Не удалось запустить локальную модель'
+      smartCorrectionStatusValue.textContent = 'Ошибка'
+      break
+    default:
+      smartCorrectionDetail.textContent = 'При включении загрузится локальная модель · около 834 МБ'
+      smartCorrectionStatusValue.textContent = 'Не загружена'
+  }
+}
+
+async function updatePreferences(patch: Partial<AppPreferences>): Promise<boolean> {
+  try {
+    preferences = api
+      ? await api.updatePreferences(patch)
+      : { ...preferences, ...patch }
+    renderPreferences()
+    return true
+  } catch (error) {
+    renderPreferences()
+    statusDetail.textContent = error instanceof Error ? error.message : String(error)
+    return false
+  }
+}
+
+function renderVocabulary(): void {
+  vocabularyCount.textContent = String(vocabulary.length)
+  vocabularyList.replaceChildren()
+
+  if (vocabulary.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'list-empty-row'
+    empty.textContent = 'Добавьте первый термин — он будет применяться к результату распознавания.'
+    vocabularyList.append(empty)
+    return
+  }
+
+  for (const term of vocabulary) {
+    const row = document.createElement('div')
+    row.className = 'vocabulary-row'
+    const copy = document.createElement('div')
+    copy.className = 'setting-copy'
+    const strong = document.createElement('strong')
+    strong.textContent = term
+    const detail = document.createElement('span')
+    detail.textContent = 'Предпочтительное написание'
+    copy.append(strong, detail)
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'icon-button'
+    remove.dataset.removeTerm = term
+    remove.setAttribute('aria-label', `Удалить ${term}`)
+    remove.textContent = '×'
+    row.append(copy, remove)
+    vocabularyList.append(row)
+  }
+}
+
+function renderHistory(): void {
+  historyList.replaceChildren()
+  latestResultCard.hidden = true
+  historyEmpty.hidden = history.length > 0
+  clearHistoryButton.disabled = history.length === 0
+  historyCount.textContent = history.length
+    ? `${history.length} ${pluralize(history.length, ['диктовка', 'диктовки', 'диктовок'])}`
+    : 'Нет записей'
+
+  for (const item of history) {
+    const card = document.createElement('article')
+    card.className = 'history-entry'
+    const meta = document.createElement('div')
+    meta.className = 'history-entry-meta'
+    const date = document.createElement('span')
+    date.textContent = new Intl.DateTimeFormat('ru', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(item.createdAt))
+    const metrics = document.createElement('span')
+    metrics.textContent = `${formatDuration(item.durationMs)} · ${item.latencyMs} мс`
+    meta.append(date, metrics)
+    const text = document.createElement('p')
+    text.textContent = item.text
+    const actions = document.createElement('div')
+    actions.className = 'history-entry-actions'
+    const copy = document.createElement('button')
+    copy.type = 'button'
+    copy.dataset.copyHistory = item.id
+    copy.textContent = 'Копировать'
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.dataset.removeHistory = item.id
+    remove.textContent = 'Удалить'
+    actions.append(copy, remove)
+    card.append(meta, text, actions)
+    historyList.append(card)
+  }
+}
+
+async function populateMicrophones(): Promise<void> {
+  if (!navigator.mediaDevices?.enumerateDevices) return
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+      (device) => device.kind === 'audioinput'
+    )
+    const options = [new Option('Системный', '')]
+    devices.forEach((device, index) => {
+      options.push(new Option(device.label || `Микрофон ${index + 1}`, device.deviceId))
+    })
+    microphoneSelect.replaceChildren(...options)
+    if (
+      preferences.microphoneId &&
+      !devices.some((device) => device.deviceId === preferences.microphoneId)
+    ) {
+      microphoneSelect.append(new Option('Недоступный микрофон', preferences.microphoneId))
+    }
+    microphoneSelect.value = preferences.microphoneId
+  } catch (error) {
+    console.warn('Could not enumerate microphones', error)
+  }
+}
+
+function formatDuration(durationMs: number): string {
+  const seconds = Math.max(1, Math.round(durationMs / 1000))
+  return seconds < 60 ? `${seconds} сек` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function pluralize(value: number, forms: [string, string, string]): string {
+  const mod100 = value % 100
+  const mod10 = value % 10
+  if (mod100 >= 11 && mod100 <= 19) return forms[2]
+  if (mod10 === 1) return forms[0]
+  if (mod10 >= 2 && mod10 <= 4) return forms[1]
+  return forms[2]
+}
+
 function formatAccelerator(accelerator: string, platform: NodeJS.Platform): string {
   return accelerator
     .replace('CommandOrControl', platform === 'darwin' ? '⌘' : 'Ctrl')
     .replace('Shift', platform === 'darwin' ? '⇧' : 'Shift')
+    .replace('Option', platform === 'darwin' ? '⌥' : 'Alt')
     .replaceAll('+', ' ')
+}
+
+function getStateCopy(current: RecordingState): [string, string] {
+  const holdKeyLabel = formatHoldKey(preferences.holdKey, appPlatform)
+  const idleDetail =
+    preferences.activationMode === 'hold'
+      ? `Удерживайте ${holdKeyLabel} в любом поле ввода`
+      : 'Нажмите горячую клавишу в любом поле ввода'
+  const recordingDetail =
+    preferences.activationMode === 'hold'
+      ? `00:00 · Отпустите ${holdKeyLabel}, чтобы закончить`
+      : '00:00 · Нажмите, чтобы закончить'
+  const copy: Record<RecordingState, [string, string]> = {
+    idle: ['Готов к диктовке', idleDetail],
+    starting: ['Подключаем микрофон…', 'При первом запуске подтвердите разрешение'],
+    recording: ['Слушаю', recordingDetail],
+    transcribing: ['Распознаю речь…', 'Обработка выполняется на устройстве'],
+    error: ['Не удалось записать', 'Проверьте доступ к микрофону и повторите']
+  }
+  return copy[current]
+}
+
+function renderStateCopy(): void {
+  const [label, detail] = getStateCopy(state)
+  statusLabel.textContent = label
+  if (state !== 'recording' || !recordingTimer) statusDetail.textContent = detail
+}
+
+function formatHoldKey(key: HoldKey, platform: NodeJS.Platform): string {
+  const labels: Record<HoldKey, string> = {
+    'left-control': platform === 'darwin' ? 'Левый Control' : 'Левый Ctrl',
+    'right-control': platform === 'darwin' ? 'Правый Control' : 'Правый Ctrl',
+    'left-option': platform === 'darwin' ? 'Левый Option' : 'Левый Alt',
+    'right-option': platform === 'darwin' ? 'Правый Option' : 'Правый Alt',
+    'left-command': platform === 'darwin' ? 'Левый Command' : 'Левый Win',
+    'right-command': platform === 'darwin' ? 'Правый Command' : 'Правый Win',
+    'left-shift': 'Левый Shift',
+    'right-shift': 'Правый Shift',
+    f6: 'F6',
+    f7: 'F7',
+    f8: 'F8',
+    f9: 'F9',
+    f10: 'F10',
+    f11: 'F11',
+    f12: 'F12'
+  }
+  return labels[key]
+}
+
+function holdKeyGlyphFor(key: HoldKey): string {
+  if (key.includes('control')) return appPlatform === 'darwin' ? '⌃' : 'Ctrl'
+  if (key.includes('option')) return appPlatform === 'darwin' ? '⌥' : 'Alt'
+  if (key.includes('command')) return appPlatform === 'darwin' ? '⌘' : 'Win'
+  if (key.includes('shift')) return '⇧'
+  return key.toUpperCase()
+}
+
+function holdKeyFromCode(code: string): HoldKey | null {
+  const keys: Record<string, HoldKey> = {
+    ControlLeft: 'left-control',
+    ControlRight: 'right-control',
+    AltLeft: 'left-option',
+    AltRight: 'right-option',
+    MetaLeft: 'left-command',
+    MetaRight: 'right-command',
+    ShiftLeft: 'left-shift',
+    ShiftRight: 'right-shift',
+    F6: 'f6',
+    F7: 'f7',
+    F8: 'f8',
+    F9: 'f9',
+    F10: 'f10',
+    F11: 'f11',
+    F12: 'f12'
+  }
+  return keys[code] ?? null
+}
+
+async function beginHoldKeyCapture(): Promise<void> {
+  if (preferences.activationMode !== 'hold' || isCapturingHoldKey) return
+  try {
+    holdKeyButton.disabled = true
+    if (!globalInputAvailable) {
+      globalInputAvailable = (await api?.setHotkeyCapture(false)) ?? true
+      if (!globalInputAvailable) {
+        holdKeyButton.disabled = false
+        holdKeyHint.textContent =
+          'Разрешите Cure Voicer в macOS → Универсальный доступ, затем нажмите ещё раз'
+        return
+      }
+    }
+    await api?.setHotkeyCapture(true)
+    isCapturingHoldKey = true
+    holdKeyButton.disabled = false
+    holdKeyButton.classList.add('is-capturing')
+    holdKeyButtonLabel.textContent = 'Нажмите клавишу…'
+    holdKeyGlyph.textContent = '…'
+    holdKeyHint.textContent = 'Control, Option/Alt, Command/Win, Shift или F6–F12 · Esc — отмена'
+    if (holdKeyCaptureTimer !== null) window.clearTimeout(holdKeyCaptureTimer)
+    holdKeyCaptureTimer = window.setTimeout(() => void cancelHoldKeyCapture(), 10_000)
+  } catch (error) {
+    holdKeyButton.disabled = false
+    holdKeyHint.textContent =
+      error instanceof Error ? error.message : 'Не удалось начать выбор клавиши'
+  }
+}
+
+async function finishHoldKeyCapture(key: HoldKey): Promise<void> {
+  if (!isCapturingHoldKey) return
+  stopHoldKeyCaptureUi()
+  const saved = await updatePreferences({ holdKey: key })
+  try {
+    globalInputAvailable = (await api?.setHotkeyCapture(false)) ?? true
+  } catch (error) {
+    holdKeyHint.textContent = error instanceof Error ? error.message : String(error)
+    return
+  }
+  if (saved) {
+    holdKeyHint.textContent = globalInputAvailable
+      ? `${formatHoldKey(key, appPlatform)} назначен`
+      : 'Клавиша назначена. Разрешите Cure Voicer в macOS → Универсальный доступ'
+  }
+}
+
+async function cancelHoldKeyCapture(): Promise<void> {
+  if (!isCapturingHoldKey) return
+  stopHoldKeyCaptureUi()
+  await api?.setHotkeyCapture(false).catch(() => undefined)
+  renderPreferences()
+}
+
+function stopHoldKeyCaptureUi(): void {
+  isCapturingHoldKey = false
+  if (holdKeyCaptureTimer !== null) window.clearTimeout(holdKeyCaptureTimer)
+  holdKeyCaptureTimer = null
+  holdKeyButton.classList.remove('is-capturing')
 }
 
 function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -234,6 +713,146 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 recordButton.addEventListener('click', () => void toggleRecording())
+activationModeButtons.forEach((button) => {
+  button.addEventListener('click', async () => {
+    if (isCapturingHoldKey) await cancelHoldKeyCapture()
+    const activationMode = button.dataset.activationMode as AppPreferences['activationMode']
+    await updatePreferences({ activationMode })
+  })
+})
+holdKeyButton.addEventListener('click', () => void beginHoldKeyCapture())
+window.addEventListener(
+  'keydown',
+  (event) => {
+    if (!isCapturingHoldKey) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (event.code === 'Escape') {
+      void cancelHoldKeyCapture()
+      return
+    }
+    const key = holdKeyFromCode(event.code)
+    if (key) void finishHoldKeyCapture(key)
+    else holdKeyHint.textContent = 'Эта клавиша не подходит. Используйте модификатор или F6–F12.'
+  },
+  true
+)
+window.addEventListener('blur', () => void cancelHoldKeyCapture())
+hotkeySelect.addEventListener('change', () =>
+  void updatePreferences({ accelerator: hotkeySelect.value })
+)
+microphoneSelect.addEventListener('change', () =>
+  void updatePreferences({ microphoneId: microphoneSelect.value })
+)
+autoPasteToggle.addEventListener('change', () =>
+  void updatePreferences({ autoPaste: autoPasteToggle.checked })
+)
+launchAtLoginToggle.addEventListener('change', () =>
+  void updatePreferences({ launchAtLogin: launchAtLoginToggle.checked })
+)
+showOverlayToggle.addEventListener('change', () =>
+  void updatePreferences({ showOverlayWhenIdle: showOverlayToggle.checked })
+)
+keepRecordingsToggle.addEventListener('change', () =>
+  void updatePreferences({ keepRecordings: keepRecordingsToggle.checked })
+)
+motionSelect.addEventListener('change', () =>
+  void updatePreferences({ overlayMotion: motionSelect.value as OverlayMotion })
+)
+smartCorrectionToggle.addEventListener('change', async () => {
+  const shouldEnable = smartCorrectionToggle.checked
+  if (!shouldEnable) {
+    await updatePreferences({ smartCorrectionEnabled: false })
+    return
+  }
+
+  if (!api) {
+    await updatePreferences({ smartCorrectionEnabled: true })
+    return
+  }
+
+  smartCorrectionToggle.disabled = true
+  try {
+    smartCorrectionStatus = await api.prepareSmartCorrection()
+    if (smartCorrectionStatus.state !== 'ready') {
+      throw new Error('Локальная модель не готова')
+    }
+    await updatePreferences({ smartCorrectionEnabled: true })
+  } catch (error) {
+    preferences.smartCorrectionEnabled = false
+    smartCorrectionStatus = {
+      ...smartCorrectionStatus,
+      state: 'error',
+      error: error instanceof Error ? error.message : String(error)
+    }
+    renderPreferences()
+  } finally {
+    renderSmartCorrectionStatus()
+  }
+})
+asrRetryButton.addEventListener('click', async () => {
+  if (!api) return
+  asrRetryButton.disabled = true
+  try {
+    asrStatus = await api.prepareAsr()
+  } catch (error) {
+    asrStatus = {
+      ...asrStatus,
+      state: 'error',
+      error: error instanceof Error ? error.message : String(error)
+    }
+  } finally {
+    renderAsrStatus()
+  }
+})
+vocabularyForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const term = vocabularyInput.value
+  if (!term.trim()) return
+  try {
+    vocabulary = api ? await api.addVocabularyTerm(term) : [...vocabulary, term.trim()]
+    vocabularyInput.value = ''
+    vocabularyMessage.textContent = 'Термин сохранён локально'
+    renderVocabulary()
+  } catch (error) {
+    vocabularyMessage.textContent = error instanceof Error ? error.message : String(error)
+  }
+})
+vocabularyList.addEventListener('click', async (event) => {
+  if (!(event.target instanceof Element)) return
+  const button = event.target.closest<HTMLButtonElement>('[data-remove-term]')
+  const term = button?.dataset.removeTerm
+  if (!term) return
+  vocabulary = api
+    ? await api.removeVocabularyTerm(term)
+    : vocabulary.filter((item) => item !== term)
+  renderVocabulary()
+})
+historyList.addEventListener('click', async (event) => {
+  if (!(event.target instanceof Element)) return
+  const target = event.target
+  const copyButton = target.closest<HTMLButtonElement>('[data-copy-history]')
+  const removeButton = target.closest<HTMLButtonElement>('[data-remove-history]')
+  if (copyButton) {
+    const item = history.find((entry) => entry.id === copyButton.dataset.copyHistory)
+    if (item) {
+      await api?.copyText(item.text)
+      copyButton.textContent = 'Скопировано'
+      window.setTimeout(() => (copyButton.textContent = 'Копировать'), 1_200)
+    }
+  } else if (removeButton?.dataset.removeHistory) {
+    history = api
+      ? await api.removeHistoryEntry(removeButton.dataset.removeHistory)
+      : history.filter((item) => item.id !== removeButton.dataset.removeHistory)
+    renderHistory()
+  }
+})
+clearHistoryButton.addEventListener('click', async () => {
+  if (!history.length || !window.confirm('Очистить всю локальную историю диктовок?')) return
+  await api?.clearHistory()
+  history = []
+  renderHistory()
+})
 navItems.forEach((item) => {
   item.addEventListener('click', () => selectPane(item.dataset.nav ?? 'general'))
 })
@@ -252,19 +871,45 @@ placementButtons.forEach((button) => {
   })
 })
 if (api) {
-  api.onToggleRequested(() => void toggleRecording())
+  api.onRecordingCommand((command) => void handleRecordingCommand(command))
   api.onOverlayPlacementChanged(renderOverlayPlacement)
+  api.onSmartCorrectionStatusChanged((status) => {
+    smartCorrectionStatus = status
+    renderSmartCorrectionStatus()
+  })
+  api.onAsrStatusChanged((status) => {
+    asrStatus = status
+    renderAsrStatus()
+  })
   api.getAppInfo().then((info) => {
     document.body.dataset.platform = info.platform
+    appPlatform = info.platform
+    globalInputAvailable = info.globalInputAvailable
     versionLabel.textContent = `Cure Voicer ${info.version}`
-    hotkeyLabel.textContent = formatAccelerator(info.accelerator, info.platform)
+    Array.from(hotkeySelect.options).forEach((option) => {
+      option.textContent = formatAccelerator(option.value, info.platform)
+    })
     engineLabel.textContent =
       info.asrEngine === 'not-configured' ? 'ASR не подключён' : info.asrEngine
+    modelRuntimeValue.textContent =
+      info.platform === 'darwin' ? 'Apple Neural Engine · Core ML' : 'CPU · ONNX Runtime'
+    preferences = info.preferences
+    smartCorrectionStatus = info.smartCorrection
+    asrStatus = info.asrStatus
+    vocabulary = info.vocabulary
+    history = info.history
+    renderPreferences()
+    renderVocabulary()
+    renderHistory()
     renderOverlayPlacement(info.overlayPlacement)
+    void populateMicrophones()
   })
     .catch(showError)
 } else {
   document.body.dataset.platform = 'darwin'
+  renderPreferences()
+  renderVocabulary()
+  renderHistory()
   renderOverlayPlacement({ mode: 'bottom-center' })
 }
 

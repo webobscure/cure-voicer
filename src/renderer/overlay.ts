@@ -1,4 +1,9 @@
-import type { CureVoicerApi, RecordingState } from '../shared/contracts'
+import type {
+  AppPreferences,
+  CureVoicerApi,
+  OverlayMotion,
+  RecordingState
+} from '../shared/contracts'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
 
 const caption = document.getElementById('overlayCaption')
@@ -16,6 +21,7 @@ let phase = 0
 let currentState: RecordingState = 'idle'
 let previousFrame = performance.now()
 let isDragging = false
+let overlayMotion: OverlayMotion = 'balanced'
 
 if (brandLogo) brandLogo.src = brandLogoUrl
 
@@ -50,11 +56,13 @@ function render(timestamp: number): void {
   slowLevel += (fastLevel - slowLevel) * (1 - Math.exp(-deltaSeconds * 2.1))
 
   const transient = clamp((fastLevel - slowLevel) * 3.4)
-  const activeMotion = reducedMotion
+  const baseMotion = reducedMotion
     ? 0
     : currentState === 'recording'
       ? 0.12 + fastLevel * 0.56
       : 0.1
+  const motionFactor = overlayMotion === 'calm' ? 0.5 : overlayMotion === 'expressive' ? 1.28 : 1
+  const activeMotion = baseMotion * motionFactor
   phase += deltaSeconds * (1.35 + activeMotion * 5.2 + transient * 3.4)
 
   const breath = Math.sin(timestamp * 0.0017) * 0.5 + 0.5
@@ -98,6 +106,12 @@ function clamp(value: number): number {
 
 if (api) {
   api.onOverlayState(setState)
+  const applyPreferences = (preferences: AppPreferences): void => {
+    overlayMotion = preferences.overlayMotion
+    document.body.dataset.motion = overlayMotion
+  }
+  api.onOverlayPreferencesChanged(applyPreferences)
+  api.getAppInfo().then((info) => applyPreferences(info.preferences)).catch(console.error)
   api.onOverlayAudioLevel((level) => {
     targetLevel = Math.max(0, Math.min(1, level))
   })

@@ -11,12 +11,13 @@ export class AudioRecorder {
 
   constructor(private readonly onLevel: (level: number) => void) {}
 
-  async start(): Promise<void> {
+  async start(deviceId = ''): Promise<void> {
     if (this.context) throw new Error('Recorder is already running')
 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
