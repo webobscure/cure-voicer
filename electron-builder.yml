@@ -61,5 +61,7 @@ mac:
   extraResources:
     - from: native/macos-asr/.build/release/cure-voicer-asr
       to: bin/cure-voicer-asr
+    - from: native/macos-asr/.build/release/cure-voicer-input
+      to: bin/cure-voicer-input
 
 publish: null

@@ -6,6 +6,7 @@ import {
 
 interface LegacyPreferences {
   autoPaste?: unknown
+  insertionMode?: unknown
   keepRecordings?: unknown
 }
 
@@ -18,8 +19,11 @@ export function migrateLegacySettings(input: unknown): SettingsV1 {
   const legacy = input as LegacyState
   const preferences = legacy.preferences
   return mergeSettingsV1({
-    insertionMode:
-      preferences?.autoPaste === false ? 'clipboard-only' : defaultSettingsV1.insertionMode,
+    insertionMode: isInsertionMode(preferences?.insertionMode)
+      ? preferences.insertionMode
+      : preferences?.autoPaste === false
+        ? 'clipboard-only'
+        : defaultSettingsV1.insertionMode,
     afterDictation: preferences?.autoPaste === false ? 'copy' : 'insert',
     keepRecordings:
       typeof preferences?.keepRecordings === 'boolean'
@@ -28,3 +32,12 @@ export function migrateLegacySettings(input: unknown): SettingsV1 {
   })
 }
 
+function isInsertionMode(value: unknown): value is SettingsV1['insertionMode'] {
+  return [
+    'keyboard',
+    'accessibility',
+    'clipboard-safe',
+    'clipboard-only',
+    'internal-editor'
+  ].includes(String(value))
+}

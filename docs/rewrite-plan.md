@@ -127,25 +127,32 @@ cancellation remains a stage 8 hardening task.
 
 ## Stage 3 — insertion and clipboard safety
 
-Status: **not started**
+Status: **completed on 2026-07-23**
 
-- [ ] Add `InsertionMode`, context/result/error types and
+- [x] Add `InsertionMode`, context/result/error types and
       `TextInsertionProvider` interface.
-- [ ] Implement provider registry, support probes and deterministic fallback.
-- [ ] Implement macOS keyboard/accessibility adapters.
-- [ ] Implement Windows Unicode input/active-window adapters.
-- [ ] Add clipboard-only and internal-editor providers.
-- [ ] Implement serialized safe clipboard transaction: all formats snapshot,
+- [x] Implement provider registry, support probes and deterministic fallback.
+- [x] Implement macOS keyboard/accessibility adapters and native Swift helper.
+- [x] Implement Windows Unicode input/active-window adapters.
+- [x] Add clipboard-only and internal-editor providers.
+- [x] Implement serialized safe clipboard transaction: all formats snapshot,
       ownership fingerprint, target wait, mutation detection and conditional
       restoration.
-- [ ] Capture active application before recording and revalidate before insert.
-- [ ] Block password/secure fields and blacklisted applications.
-- [ ] Add redacted insertion journal and diagnostics.
-- [ ] Add Punto/clipboard-manager race, user-copy, double-insert, focus-change,
+- [x] Capture active application before recording and revalidate before insert.
+- [x] Block detected password/secure fields and blacklisted applications.
+- [x] Add redacted insertion journal and diagnostics.
+- [x] Add simulated Punto/clipboard-manager race, user-copy, double-insert,
+      focus-change,
       Unicode/emoji/newline and UAC failure tests.
 
 Exit criteria: default insertion does not modify the clipboard; clipboard fallback
 never overwrites newer user/third-party data.
+
+The macOS helper was compiled and its active-application JSON contract was
+exercised locally. Windows Unicode/UIPI capability is unit-tested and remains to
+be exercised on the Windows CI runner and with a real elevated target in stage 8.
+The Punto tests simulate its observable clipboard mutation; a release candidate
+still requires the manual Punto matrix documented in `docs/testing.md`.
 
 ## Stage 4 — editor and transformations
 

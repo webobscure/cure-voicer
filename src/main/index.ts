@@ -31,7 +31,7 @@ import type {
   RecordingState
 } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
-import { isTextInsertionInProgress } from './text-inserter'
+import { isTextInsertionInProgress } from '../modules/insertion/insertion-activity'
 import { createApplicationServices } from './app/create-application-services'
 import type { RecordingService } from './recording-service'
 import { registerApplicationLifecycle } from './app/application-lifecycle'
@@ -74,6 +74,8 @@ const applicationServices = createApplicationServices(currentDirectory)
 const {
   asrEngine,
   dictation: dictationMachine,
+  activeApplications,
+  internalEditor,
   recording: recordingService,
   smartCorrection: smartCorrectionService
 } = applicationServices
@@ -91,6 +93,8 @@ let preferences: AppPreferences = {
   holdKey: defaultHoldKey,
   microphoneId: '',
   autoPaste: true,
+  insertionMode: 'keyboard',
+  blockedApplicationIds: [],
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -108,6 +112,7 @@ let overlayDragTimer: ReturnType<typeof setInterval> | null = null
 let overlayDragSafetyTimer: ReturnType<typeof setTimeout> | null = null
 let activeRecordingFinish: ReturnType<RecordingService['finish']> | null = null
 let activeRecordingAbortController: AbortController | null = null
+const activeApplicationByOperation = new Map<string, Awaited<ReturnType<typeof activeApplications.getActiveApplication>>>()
 let overlayHiddenUntilRecording = false
 let keyboardHookRunning = false
 let holdKeyPressed = false
@@ -116,6 +121,10 @@ let hotkeyCaptureActive = false
 let hotkeyCaptureSafetyTimer: ReturnType<typeof setTimeout> | null = null
 
 dictationMachine.subscribe((snapshot) => synchronizeLegacyPresentation(snapshot))
+internalEditor.setHandler((text) => {
+  showWindow()
+  mainWindow?.webContents.send(IPC.internalEditorText, text)
+})
 
 interface PersistedAppState {
   overlayPlacement: OverlayPlacement
@@ -328,7 +337,7 @@ function registerIpc(): void {
     synchronizeLegacyRecordingEvent(recordingStateSchema.parse(state))
   })
 
-  ipcMain.handle(IPC.beginDictation, (event, sessionId: string) => {
+  ipcMain.handle(IPC.beginDictation, async (event, sessionId: string) => {
     assertSettingsSender(event)
     const operationId = dictationSessionIdSchema.parse(sessionId)
     const snapshot = dictationMachine.snapshot
@@ -336,6 +345,14 @@ function registerIpc(): void {
       throw new Error('Another dictation operation is already active')
     }
     dictationMachine.dispatch({ type: 'START', operationId })
+    const activeApplication = await activeApplications.getActiveApplication().catch(() => ({
+      platform:
+        process.platform === 'darwin' || process.platform === 'win32'
+          ? process.platform
+          : 'unknown',
+      capturedAt: new Date().toISOString()
+    } as const))
+    activeApplicationByOperation.set(operationId, activeApplication)
   })
 
   ipcMain.handle(IPC.cancelDictation, (event) => {
@@ -367,7 +384,11 @@ function registerIpc(): void {
         keepRecording: preferences.keepRecordings,
         preferredTerms: vocabulary,
         smartCorrectionEnabled: preferences.smartCorrectionEnabled,
-        signal: activeRecordingAbortController.signal
+        signal: activeRecordingAbortController.signal,
+        operationId,
+        activeApplication: activeApplicationByOperation.get(operationId),
+        insertionMode: preferences.insertionMode,
+        blockedApplicationIds: preferences.blockedApplicationIds
       })
       try {
         const result = await activeRecordingFinish
@@ -393,6 +414,7 @@ function registerIpc(): void {
       } finally {
         activeRecordingFinish = null
         activeRecordingAbortController = null
+        activeApplicationByOperation.delete(operationId)
       }
     }
   )
@@ -988,6 +1010,16 @@ function isPresetPlacement(
   return ['bottom-left', 'bottom-center', 'bottom-right'].includes(String(value))
 }
 
+function isInsertionMode(value: unknown): value is AppPreferences['insertionMode'] {
+  return [
+    'keyboard',
+    'accessibility',
+    'clipboard-safe',
+    'clipboard-only',
+    'internal-editor'
+  ].includes(String(value))
+}
+
 async function loadAppState(): Promise<void> {
   try {
     const contents = await readFile(settingsFilePath(), 'utf8')
@@ -1015,6 +1047,16 @@ async function loadAppState(): Promise<void> {
         holdKey: isHoldKey(stored.holdKey) ? stored.holdKey : defaultHoldKey,
         microphoneId: typeof stored.microphoneId === 'string' ? stored.microphoneId : '',
         autoPaste: typeof stored.autoPaste === 'boolean' ? stored.autoPaste : true,
+        insertionMode: isInsertionMode(stored.insertionMode)
+          ? stored.insertionMode
+          : 'keyboard',
+        blockedApplicationIds: Array.isArray(stored.blockedApplicationIds)
+          ? stored.blockedApplicationIds
+              .filter((value): value is string => typeof value === 'string')
+              .map((value) => value.trim())
+              .filter(Boolean)
+              .slice(0, 500)
+          : [],
         keepRecordings:
           typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
@@ -1110,6 +1152,13 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   if (patch.overlayMotion !== undefined) {
     if (!isOverlayMotion(patch.overlayMotion)) throw new Error('Invalid overlay motion')
     next.overlayMotion = patch.overlayMotion
+  }
+  if (patch.insertionMode !== undefined) {
+    if (!isInsertionMode(patch.insertionMode)) throw new Error('Invalid insertion mode')
+    next.insertionMode = patch.insertionMode
+  }
+  if (patch.blockedApplicationIds !== undefined) {
+    next.blockedApplicationIds = patch.blockedApplicationIds
   }
   if (patch.autoStopSilenceMs !== undefined) {
     if (

@@ -12,10 +12,11 @@ The application currently provides:
 - a draggable voice orb with saved custom position and left/center/right presets;
 - microphone capture with a live level meter;
 - conversion to mono 16 kHz PCM WAV;
-- local recording storage;
+- optional local recording storage (disabled by default for new profiles);
 - local Parakeet TDT 0.6B V3 recognition on Apple Silicon through FluidAudio/Core ML;
 - local Parakeet TDT 0.6B V3 INT8 recognition on Windows x64 through sherpa-onnx;
-- clipboard delivery and automatic paste into the field that had focus.
+- direct Unicode insertion without the clipboard, with accessibility,
+  transactional clipboard and internal-editor fallbacks.
 
 Audio and transcription stay on the device. The platform-specific runtime downloads
 the Parakeet model once on the first run and keeps it in its local model cache.
@@ -87,9 +88,9 @@ The default activation mode is hold-to-talk: hold right Option on macOS or right
 Ctrl on Windows, speak, and release to transcribe and insert. Toggle mode with
 `CommandOrControl+Shift+Space` is available in settings.
 
-On macOS, automatic paste requires **System Settings → Privacy & Security →
-Accessibility** access for Cure Voicer/Electron. If access has not been granted,
-the recognized text remains safely available in the clipboard.
+On macOS, global hotkeys and external insertion require **System Settings →
+Privacy & Security → Accessibility** access for Cure Voicer. Direct insertion
+uses a signed Swift helper and does not depend on the current keyboard layout.
 
 The orb can be moved by holding the left mouse button over it. Presets are
 available under **Settings → Dictation**; a manually dragged position is saved
@@ -114,7 +115,11 @@ runtime-validated IPC and provider-based insertion. See:
 - [rewrite plan](docs/rewrite-plan.md);
 - [architecture](docs/architecture.md);
 - [security](docs/security.md);
-- [testing](docs/testing.md).
+- [testing](docs/testing.md);
+- [text insertion](docs/text-insertion.md);
+- [clipboard safety](docs/clipboard-safety.md);
+- [macOS platform notes](docs/platform-macos.md);
+- [Windows platform notes](docs/platform-windows.md).
 
 ASR adapters:
 

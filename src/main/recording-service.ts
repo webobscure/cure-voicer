@@ -7,9 +7,12 @@ import {
   type TranscriptCorrector
 } from '../shared/smart-correction'
 import { encodeFloat32PcmAsWav, float32FromBytes } from './audio/wav'
-import { TextInserter } from './text-inserter'
 import { postProcessTranscript } from '../shared/transcript-postprocessor'
 import type { SpeechRecognitionProviderRegistry } from '../modules/transcription/provider-registry'
+import type { TextInsertionService } from '../modules/insertion/insertion-service'
+import type { ActiveApplicationProvider } from '../modules/insertion/ports'
+import type { ActiveApplicationContext, InsertionMode } from '../shared/types/insertion'
+import { randomUUID } from 'node:crypto'
 
 export class RecordingService {
   private previousTranscript = ''
@@ -18,7 +21,8 @@ export class RecordingService {
     private readonly transcriptionProviders: SpeechRecognitionProviderRegistry,
     private readonly defaultProviderId: string,
     private readonly transcriptCorrector?: TranscriptCorrector,
-    private readonly textInserter = new TextInserter()
+    private readonly textInserter?: TextInsertionService,
+    private readonly activeApplications?: ActiveApplicationProvider
   ) {}
 
   get recordingsDirectory(): string {
@@ -33,6 +37,10 @@ export class RecordingService {
       preferredTerms?: string[]
       smartCorrectionEnabled?: boolean
       signal?: AbortSignal
+      operationId?: string
+      activeApplication?: ActiveApplicationContext
+      insertionMode?: InsertionMode
+      blockedApplicationIds?: readonly string[]
     } = {}
   ): Promise<RecordingResult> {
     if (payload.sampleRate !== 16_000) {
@@ -95,7 +103,7 @@ export class RecordingService {
       }
       const transcript = postProcessTranscript(correctedText, preferredTerms)
       if (transcript) this.previousTranscript = transcript
-      const insertion = await this.textInserter.insert(transcript, options.autoPaste ?? true)
+      const insertion = await this.insertTranscript(transcript, options)
 
       return {
         recordingPath: keepRecording ? recordingPath : '',
@@ -107,6 +115,37 @@ export class RecordingService {
     } finally {
       if (!keepRecording) await unlink(recordingPath).catch(() => undefined)
     }
+  }
+
+  private async insertTranscript(
+    transcript: string,
+    options: {
+      autoPaste?: boolean
+      signal?: AbortSignal
+      operationId?: string
+      activeApplication?: ActiveApplicationContext
+      insertionMode?: InsertionMode
+      blockedApplicationIds?: readonly string[]
+    }
+  ): Promise<RecordingResult['insertion']> {
+    if (!transcript) return 'skipped'
+    if (!this.textInserter || !this.activeApplications) return 'skipped'
+    const activeApplication =
+      options.activeApplication ?? (await this.activeApplications.getActiveApplication())
+    const requestedMode = options.autoPaste === false
+      ? 'clipboard-only'
+      : (options.insertionMode ?? 'keyboard')
+    const result = await this.textInserter.insertText(transcript, {
+      operationId: options.operationId ?? randomUUID(),
+      requestedMode,
+      activeApplication,
+      blockedApplicationIds: options.blockedApplicationIds,
+      allowFallback: options.autoPaste !== false,
+      signal: options.signal
+    })
+    if (result.outcome === 'inserted') return 'pasted'
+    if (result.outcome === 'copied') return 'clipboard'
+    return 'skipped'
   }
 }
 

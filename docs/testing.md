@@ -25,11 +25,18 @@ may require desktop permissions in a sandboxed development environment.
 - renderer URL policy tests;
 - validated IPC handler tests;
 - structured log redaction tests.
+- dictation state-machine, stale operation and cancellation tests;
+- bounded PCM capture-session and silence detector tests;
+- transcription provider selection tests;
+- insertion provider/fallback/focus/security policy tests;
+- multi-format clipboard transaction, ownership and concurrency tests;
+- platform input capability and mixed-Unicode tests.
 
 ## Required insertion scenarios
 
-The stage 3 harness will use fake platform/clipboard ports and a deterministic
-scheduler for:
+The stage 3 harness uses fake platform/clipboard ports and a deterministic
+scheduler for the transport-level cases below. Application-specific cases stay
+in the manual release matrix:
 
 1. Punto Switcher or a clipboard manager mutating temporary text;
 2. a user copying new data before restoration;
@@ -65,4 +72,3 @@ text payload.
 - Unicode input in Notepad, Office, browsers, messengers and IDEs;
 - elevated target safe failure;
 - signed NSIS/portable artifacts before public release.
-

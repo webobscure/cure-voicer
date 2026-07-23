@@ -46,6 +46,7 @@ const hotkeySelect = getElement<HTMLSelectElement>('hotkeySelect')
 const microphoneSelect = getElement<HTMLSelectElement>('microphoneSelect')
 const autoStopSilenceSelect = getElement<HTMLSelectElement>('autoStopSilenceSelect')
 const autoPasteToggle = getElement<HTMLInputElement>('autoPasteToggle')
+const insertionModeSelect = getElement<HTMLSelectElement>('insertionModeSelect')
 const launchAtLoginToggle = getElement<HTMLInputElement>('launchAtLoginToggle')
 const showOverlayToggle = getElement<HTMLInputElement>('showOverlayToggle')
 const keepRecordingsToggle = getElement<HTMLInputElement>('keepRecordingsToggle')
@@ -128,6 +129,8 @@ let preferences: AppPreferences = {
   holdKey: 'right-option',
   microphoneId: '',
   autoPaste: true,
+  insertionMode: 'keyboard',
+  blockedApplicationIds: [],
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -153,6 +156,12 @@ let history: DictationHistoryItem[] = []
 const recorder = new AudioRecorder(updateLevel)
 const silenceDetector = new SilenceDetector(() => {
   if (state === 'recording') void finishRecording()
+})
+api?.onInternalEditorText((text) => {
+  resultText.textContent = text
+  resultPath.textContent = 'Открыто во внутреннем редакторе'
+  latestResultCard.hidden = false
+  selectPane('history')
 })
 
 async function setState(nextState: RecordingState): Promise<void> {
@@ -443,6 +452,8 @@ function renderPreferences(): void {
   microphoneSelect.value = preferences.microphoneId
   autoStopSilenceSelect.value = String(preferences.autoStopSilenceMs)
   autoPasteToggle.checked = preferences.autoPaste
+  insertionModeSelect.value = preferences.insertionMode
+  insertionModeSelect.disabled = !preferences.autoPaste
   launchAtLoginToggle.checked = preferences.launchAtLogin
   showOverlayToggle.checked = preferences.showOverlayWhenIdle
   keepRecordingsToggle.checked = preferences.keepRecordings
@@ -1031,6 +1042,11 @@ autoStopSilenceSelect.addEventListener('change', () =>
 )
 autoPasteToggle.addEventListener('change', () =>
   void updatePreferences({ autoPaste: autoPasteToggle.checked })
+)
+insertionModeSelect.addEventListener('change', () =>
+  void updatePreferences({
+    insertionMode: insertionModeSelect.value as AppPreferences['insertionMode']
+  })
 )
 launchAtLoginToggle.addEventListener('change', () =>
   void updatePreferences({ launchAtLogin: launchAtLoginToggle.checked })

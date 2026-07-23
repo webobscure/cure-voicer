@@ -96,6 +96,12 @@ const api: CureVoicerApi = {
       callback(status)
     ipcRenderer.on(IPC.asrStatusChanged, listener)
     return () => ipcRenderer.removeListener(IPC.asrStatusChanged, listener)
+  },
+  onInternalEditorText: (callback: (text: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, text: string): void =>
+      callback(text)
+    ipcRenderer.on(IPC.internalEditorText, listener)
+    return () => ipcRenderer.removeListener(IPC.internalEditorText, listener)
   }
 }
 

@@ -6,7 +6,8 @@ let package = Package(
     name: "CureVoicerAsr",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "cure-voicer-asr", targets: ["CureVoicerAsr"])
+        .executable(name: "cure-voicer-asr", targets: ["CureVoicerAsr"]),
+        .executable(name: "cure-voicer-input", targets: ["CureVoicerInput"])
     ],
     dependencies: [
         .package(
@@ -20,6 +21,7 @@ let package = Package(
             dependencies: [
                 .product(name: "FluidAudio", package: "FluidAudio")
             ]
-        )
+        ),
+        .executableTarget(name: "CureVoicerInput")
     ]
 )

@@ -132,6 +132,17 @@
                 <label class="toggle-control"><input id="autoPasteToggle" type="checkbox" /><span></span></label>
               </div>
               <div class="setting-row">
+                <div class="setting-symbol cyan"><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"></path></svg></div>
+                <div class="setting-copy"><strong>Способ вставки</strong><span>Без буфера по умолчанию, с безопасной резервной цепочкой</span></div>
+                <select class="compact-select" id="insertionModeSelect" aria-label="Способ вставки текста">
+                  <option value="keyboard">Прямой ввод</option>
+                  <option value="accessibility">Accessibility API</option>
+                  <option value="clipboard-safe">Безопасный буфер</option>
+                  <option value="clipboard-only">Только копировать</option>
+                  <option value="internal-editor">В редактор</option>
+                </select>
+              </div>
+              <div class="setting-row">
                 <div class="setting-symbol green"><svg viewBox="0 0 24 24"><path d="M12 3v5M5.6 5.6l3.5 3.5M3 12h5M5.6 18.4l3.5-3.5M12 21v-5M18.4 18.4l-3.5-3.5M21 12h-5M18.4 5.6l-3.5 3.5"></path></svg></div>
                 <div class="setting-copy"><strong>Запуск при входе</strong><span>Работать в фоне после включения компьютера</span></div>
                 <label class="toggle-control"><input id="launchAtLoginToggle" type="checkbox" /><span></span></label>

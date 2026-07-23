@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build:tray-icons": "node scripts/render-tray-icons.mjs",
-    "build:macos-asr": "swift build -c release --package-path native/macos-asr",
+    "build:macos-asr": "node scripts/build-macos-native.mjs",
     "build": "electron-vite build",
     "lint": "oxlint src tests scripts electron.vite.config.ts",
     "pack:mac": "npm run build:macos-asr && npm run build && electron-builder --mac --arm64 --config electron-builder.yml",

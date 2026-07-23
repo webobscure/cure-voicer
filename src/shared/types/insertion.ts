@@ -21,6 +21,7 @@ export interface InsertionContext {
   operationId: string
   requestedMode: InsertionMode
   activeApplication: ActiveApplicationContext
+  blockedApplicationIds?: readonly string[]
   allowFallback: boolean
   signal?: AbortSignal
 }
@@ -54,4 +55,3 @@ export interface TextInsertionProvider {
   isSupported(context: InsertionContext): Promise<boolean>
   insertText(text: string, context: InsertionContext): Promise<InsertionResult>
 }
-

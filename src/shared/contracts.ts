@@ -28,7 +28,8 @@ export const IPC = {
   prepareAsr: 'models:prepare-asr',
   prepareSmartCorrection: 'models:prepare-smart-correction',
   smartCorrectionStatusChanged: 'models:smart-correction-status-changed',
-  asrStatusChanged: 'models:asr-status-changed'
+  asrStatusChanged: 'models:asr-status-changed',
+  internalEditorText: 'editor:open-text'
 } as const
 
 export type RecordingState =
@@ -107,6 +108,8 @@ export interface AppPreferences {
   holdKey: HoldKey
   microphoneId: string
   autoPaste: boolean
+  insertionMode: import('./types/insertion').InsertionMode
+  blockedApplicationIds: string[]
   keepRecordings: boolean
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
@@ -192,6 +195,7 @@ export interface CureVoicerApi {
     callback: (status: SmartCorrectionStatus) => void
   ): () => void
   onAsrStatusChanged(callback: (status: AsrStatus) => void): () => void
+  onInternalEditorText(callback: (text: string) => void): () => void
 }
 
 export interface CureVoicerOverlayApi {

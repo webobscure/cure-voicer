@@ -45,6 +45,14 @@ export const legacyPreferencesPatchSchema = z
     holdKey: holdKeySchema,
     microphoneId: z.string().max(512),
     autoPaste: z.boolean(),
+    insertionMode: z.enum([
+      'keyboard',
+      'accessibility',
+      'clipboard-safe',
+      'clipboard-only',
+      'internal-editor'
+    ]),
+    blockedApplicationIds: z.array(z.string().trim().min(1).max(512)).max(500),
     keepRecordings: z.boolean(),
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),
