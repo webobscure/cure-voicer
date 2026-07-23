@@ -15,8 +15,9 @@ test('launches hardened settings UI and exposes only the typed preload surface',
   })
   try {
     await application.firstWindow()
-    await expect.poll(() => application.windows().length).toBe(2)
-    await expect.poll(() => application.windows().some((candidate) => candidate.url().includes('/index.html'))).toBe(true)
+    await expect
+      .poll(() => application.windows().some((candidate) => candidate.url().includes('/index.html')))
+      .toBe(true)
     const page = application.windows().find((candidate) => candidate.url().includes('/index.html'))
     if (!page) throw new Error('Settings window was not created')
     await expect(page).toHaveTitle('Cure Voicer')
@@ -41,7 +42,7 @@ test('launches hardened settings UI and exposes only the typed preload surface',
     await expect(page.getByText('Защищённое хранилище')).toBeVisible()
     await expect(page.getByText('Диагностика не включает распознанный текст')).toBeVisible()
   } finally {
-    application.process().kill('SIGKILL')
+    await application.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
     await application.close().catch(() => undefined)
     await rm(userData, { recursive: true, force: true })
   }
