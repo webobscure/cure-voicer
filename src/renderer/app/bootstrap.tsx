@@ -9,6 +9,12 @@ import { HotkeySettingsPage } from '../features/shortcuts/HotkeySettingsPage'
 import { IntegrationSettingsPage } from '../features/integrations/IntegrationSettingsPage'
 import { TemplatesPage } from '../features/templates/TemplatesPage'
 import { ClipboardSettingsPage } from '../features/clipboard/ClipboardSettingsPage'
+import { I18nProvider } from './i18n/i18n-context'
+import type { I18nStore } from './i18n/i18n-store'
+import { OnboardingPage } from '../features/onboarding/OnboardingPage'
+import { onboardingController } from '../features/onboarding/onboarding-controller'
+import brandLogoUrl from '../../../assets/branding/cure-voicer-liquid-glass-logo.png'
+import type { AppPreferences } from '../../shared/contracts'
 
 let diagnosticsRoot: Root | null = null
 let editorRoot: Root | null = null
@@ -17,8 +23,13 @@ let hotkeysRoot: Root | null = null
 let integrationsRoot: Root | null = null
 let templatesRoot: Root | null = null
 let clipboardRoot: Root | null = null
+let onboardingRoot: Root | null = null
 
-export function mountReactFeatures(api: CureVoicerApi | undefined): void {
+export function mountReactFeatures(
+  api: CureVoicerApi | undefined,
+  i18n: I18nStore,
+  onPreferencesChanged: (preferences: AppPreferences) => void
+): void {
   const container = document.getElementById('diagnosticsReactRoot')
   const editorContainer = document.getElementById('editorReactRoot')
   const commandsContainer = document.getElementById('commandsReactRoot')
@@ -26,7 +37,15 @@ export function mountReactFeatures(api: CureVoicerApi | undefined): void {
   const integrationsContainer = document.getElementById('integrationsReactRoot')
   const templatesContainer = document.getElementById('templatesReactRoot')
   const clipboardContainer = document.getElementById('clipboardReactRoot')
-  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot) return
+  const onboardingContainer = document.getElementById('onboardingReactRoot')
+  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot) return
+
+  if (onboardingContainer) {
+    onboardingRoot = createRoot(onboardingContainer)
+    onboardingRoot.render(
+      <StrictMode><I18nProvider store={i18n}><OnboardingPage controller={onboardingController} logoUrl={brandLogoUrl} /></I18nProvider></StrictMode>
+    )
+  }
 
   if (!api) {
     if (container) container.textContent = 'Диагностика доступна только в приложении.'
@@ -39,33 +58,33 @@ export function mountReactFeatures(api: CureVoicerApi | undefined): void {
     return
   }
 
-  const client = new ElectronDesktopClient(api)
+  const client = new ElectronDesktopClient(api, onPreferencesChanged)
   if (container) {
     diagnosticsRoot = createRoot(container)
-    diagnosticsRoot.render(<StrictMode><DiagnosticsPage client={client} /></StrictMode>)
+    diagnosticsRoot.render(<StrictMode><I18nProvider store={i18n}><DiagnosticsPage client={client} /></I18nProvider></StrictMode>)
   }
   if (editorContainer) {
     editorRoot = createRoot(editorContainer)
-    editorRoot.render(<StrictMode><EditorPage client={client} /></StrictMode>)
+    editorRoot.render(<StrictMode><I18nProvider store={i18n}><EditorPage client={client} /></I18nProvider></StrictMode>)
   }
   if (commandsContainer) {
     commandsRoot = createRoot(commandsContainer)
-    commandsRoot.render(<StrictMode><CommandSettingsPage client={client} /></StrictMode>)
+    commandsRoot.render(<StrictMode><I18nProvider store={i18n}><CommandSettingsPage client={client} /></I18nProvider></StrictMode>)
   }
   if (hotkeysContainer) {
     hotkeysRoot = createRoot(hotkeysContainer)
-    hotkeysRoot.render(<StrictMode><HotkeySettingsPage client={client} /></StrictMode>)
+    hotkeysRoot.render(<StrictMode><I18nProvider store={i18n}><HotkeySettingsPage client={client} /></I18nProvider></StrictMode>)
   }
   if (integrationsContainer) {
     integrationsRoot = createRoot(integrationsContainer)
-    integrationsRoot.render(<StrictMode><IntegrationSettingsPage client={client} /></StrictMode>)
+    integrationsRoot.render(<StrictMode><I18nProvider store={i18n}><IntegrationSettingsPage client={client} /></I18nProvider></StrictMode>)
   }
   if (templatesContainer) {
     templatesRoot = createRoot(templatesContainer)
-    templatesRoot.render(<StrictMode><TemplatesPage client={client} /></StrictMode>)
+    templatesRoot.render(<StrictMode><I18nProvider store={i18n}><TemplatesPage client={client} /></I18nProvider></StrictMode>)
   }
   if (clipboardContainer) {
     clipboardRoot = createRoot(clipboardContainer)
-    clipboardRoot.render(<StrictMode><ClipboardSettingsPage client={client} /></StrictMode>)
+    clipboardRoot.render(<StrictMode><I18nProvider store={i18n}><ClipboardSettingsPage client={client} /></I18nProvider></StrictMode>)
   }
 }

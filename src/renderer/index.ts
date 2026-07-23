@@ -14,9 +14,19 @@ import { AudioRecorder } from './audio-recorder'
 import { SilenceDetector } from '../modules/dictation/silence-detector'
 import { mountReactFeatures } from './app/bootstrap'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
+import { AppearanceController } from './app/appearance'
+import { I18nStore } from './app/i18n/i18n-store'
+import { onboardingController } from './features/onboarding/onboarding-controller'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
-mountReactFeatures(api)
+const i18n = new I18nStore('system', navigator.language)
+const appearance = new AppearanceController(
+  document,
+  window.matchMedia('(prefers-color-scheme: dark)'),
+  navigator.language
+)
+appearance.start()
+mountReactFeatures(api, i18n, applyAppearance)
 
 const recordButton = getElement<HTMLButtonElement>('recordButton')
 const statusLabel = getElement('statusLabel')
@@ -72,40 +82,8 @@ const historyCount = getElement('historyCount')
 const clearHistoryButton = getElement<HTMLButtonElement>('clearHistoryButton')
 const latestResultCard = getElement('latestResultCard')
 const restartOnboardingButton = getElement<HTMLButtonElement>('restartOnboardingButton')
-const onboarding = getElement('onboarding')
-const onboardingLogo = getElement<HTMLImageElement>('onboardingLogo')
-const onboardingHeroLogo = getElement<HTMLImageElement>('onboardingHeroLogo')
-const onboardingSteps = Array.from(
-  document.querySelectorAll<HTMLElement>('[data-onboarding-step]')
-)
-const onboardingProgress = Array.from(
-  document.querySelectorAll<HTMLElement>('.onboarding-progress i')
-)
-const onboardingBackButton = getElement<HTMLButtonElement>('onboardingBackButton')
-const onboardingNextButton = getElement<HTMLButtonElement>('onboardingNextButton')
-const onboardingMicrophoneButton = getElement<HTMLButtonElement>(
-  'onboardingMicrophoneButton'
-)
-const onboardingAccessibilityButton = getElement<HTMLButtonElement>(
-  'onboardingAccessibilityButton'
-)
-const accessibilityTitle = getElement('accessibilityTitle')
-const accessibilityDetail = getElement('accessibilityDetail')
-const permissionNote = getElement('permissionNote')
-const onboardingHoldKeyGlyph = getElement('onboardingHoldKeyGlyph')
-const onboardingHoldKeyLabel = getElement('onboardingHoldKeyLabel')
-const onboardingModelDetail = getElement('onboardingModelDetail')
-const onboardingModelProgress = getElement<HTMLProgressElement>(
-  'onboardingModelProgress'
-)
-const onboardingModelBadge = getElement('onboardingModelBadge')
-const onboardingTestInput = getElement<HTMLTextAreaElement>('onboardingTestInput')
-const onboardingTestStatus = getElement('onboardingTestStatus')
-const onboardingTestButton = getElement<HTMLButtonElement>('onboardingTestButton')
 
 if (miniBrandLogo) miniBrandLogo.src = brandLogoUrl
-onboardingLogo.src = brandLogoUrl
-onboardingHeroLogo.src = brandLogoUrl
 
 let state: RecordingState = 'idle'
 let recordingStartedAt = 0
@@ -118,8 +96,6 @@ let appPlatform: NodeJS.Platform = 'darwin'
 let globalInputAvailable = true
 let isCapturingHoldKey = false
 let holdKeyCaptureTimer: number | null = null
-let onboardingStep = 0
-let onboardingIsFirstRun = true
 let microphonePermissionGranted = false
 let microphonePermissionDenied = false
 let preferences: AppPreferences = {
@@ -188,20 +164,7 @@ async function setState(nextState: RecordingState): Promise<void> {
     'aria-label',
     nextState === 'recording' ? 'Остановить запись' : 'Начать запись'
   )
-  onboardingTestButton.disabled =
-    nextState === 'starting' ||
-    nextState === 'transcribing' ||
-    (nextState !== 'recording' && asrStatus.state !== 'ready')
-  onboardingTestButton.textContent =
-    nextState === 'recording' ? 'Остановить' : 'Начать запись'
-  onboardingTestStatus.textContent =
-    nextState === 'recording'
-      ? 'Слушаю…'
-      : nextState === 'transcribing'
-        ? 'Распознаю локально…'
-        : asrStatus.state === 'ready'
-          ? 'Готово к проверке'
-          : 'Модель готовится'
+  onboardingController.update({ recordingState: nextState })
   if (api) await api.setRecordingState(nextState)
 }
 
@@ -294,7 +257,9 @@ async function finishRecording(): Promise<void> {
 
     if (result.transcript) {
       resultText.textContent = result.transcript
-      if (!onboarding.hidden) onboardingTestInput.value = result.transcript
+      if (onboardingController.getSnapshot().visible) {
+        onboardingController.update({ transcript: result.transcript })
+      }
       statusDetail.textContent =
         result.insertion === 'pasted'
           ? `Вставлено · ${result.latencyMs} мс`
@@ -302,8 +267,8 @@ async function finishRecording(): Promise<void> {
     } else {
       resultText.textContent =
         'Речь не распознана. Попробуйте говорить немного ближе к микрофону.'
-      if (!onboarding.hidden) {
-        onboardingTestInput.value = 'Речь не распознана. Попробуйте ещё раз.'
+      if (onboardingController.getSnapshot().visible) {
+        onboardingController.update({ transcript: i18n.translate('onboarding.testEmpty') })
       }
     }
     const deliveryLabel =
@@ -487,10 +452,8 @@ function renderPreferences(): void {
 }
 
 function applyAppearance(value: AppPreferences): void {
-  document.documentElement.dataset.theme = value.theme
-  document.documentElement.style.colorScheme = value.theme === 'system' ? 'light dark' : value.theme
-  const systemLocale = navigator.language.toLocaleLowerCase().startsWith('ru') ? 'ru' : 'en'
-  document.documentElement.lang = value.locale === 'system' ? systemLocale : value.locale
+  appearance.update(value)
+  i18n.setPreference(value.locale)
 }
 
 function renderAsrStatus(): void {
@@ -531,86 +494,34 @@ function renderAsrStatus(): void {
 }
 
 function renderOnboardingModelStatus(): void {
-  const percent = Math.round(asrStatus.progress * 100)
-  onboardingModelProgress.value = asrStatus.progress
-  onboardingModelProgress.hidden = asrStatus.state === 'ready'
-  onboardingTestButton.disabled =
-    state !== 'recording' && asrStatus.state !== 'ready'
-
-  switch (asrStatus.state) {
-    case 'downloading':
-      onboardingModelDetail.textContent = `Загружаем на компьютер · ${percent}%`
-      onboardingModelBadge.textContent = `${percent}%`
-      break
-    case 'loading':
-      onboardingModelDetail.textContent = 'Запускаем модель на этом компьютере…'
-      onboardingModelBadge.textContent = 'Подготовка'
-      break
-    case 'ready':
-      onboardingModelDetail.textContent = 'Работает локально и готова к диктовке'
-      onboardingModelBadge.textContent = 'Готова'
-      break
-    case 'error':
-      onboardingModelDetail.textContent = asrStatus.error ?? 'Не удалось подготовить модель'
-      onboardingModelBadge.textContent = 'Ошибка'
-      break
-    default:
-      onboardingModelDetail.textContent = 'Ожидает подготовки'
-      onboardingModelBadge.textContent = 'Ожидание'
-  }
+  onboardingController.update({ asrStatus })
 }
 
 function showOnboarding(firstRun = false): void {
-  onboardingIsFirstRun = firstRun
-  onboarding.hidden = false
-  renderOnboardingStep(0)
   renderOnboardingPermissions()
   renderOnboardingModelStatus()
+  onboardingController.update({
+    holdKeyGlyph: holdKeyGlyphFor(preferences.holdKey),
+    holdKeyLabel: formatHoldKey(preferences.holdKey, appPlatform),
+    transcript: ''
+  })
+  onboardingController.show(firstRun)
 }
 
 function renderOnboardingStep(step: number): void {
-  onboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, step))
-  onboardingSteps.forEach((element, index) => {
-    const active = index === onboardingStep
-    element.hidden = !active
-    element.classList.toggle('is-active', active)
-  })
-  onboardingProgress.forEach((dot, index) => {
-    dot.classList.toggle('is-active', index === onboardingStep)
-  })
-  onboardingBackButton.hidden = onboardingStep === 0
-  onboardingNextButton.textContent =
-    onboardingStep === onboardingSteps.length - 1 ? 'Начать работу' : 'Продолжить'
-  if (onboardingStep === 1) renderOnboardingPermissions()
-  if (onboardingStep === 2) renderOnboardingModelStatus()
+  onboardingController.setStep(step)
 }
 
 function renderOnboardingPermissions(): void {
-  onboardingMicrophoneButton.classList.toggle('is-granted', microphonePermissionGranted)
-  onboardingMicrophoneButton.classList.toggle('is-denied', microphonePermissionDenied)
-  onboardingMicrophoneButton.textContent = microphonePermissionGranted
-    ? 'Разрешено'
-    : microphonePermissionDenied
-      ? 'Настройки'
-      : 'Разрешить'
-
-  if (appPlatform === 'darwin') {
-    accessibilityTitle.textContent = 'Универсальный доступ'
-    accessibilityDetail.textContent = 'Распознаёт удержание клавиши в любом приложении'
-    onboardingAccessibilityButton.classList.toggle('is-granted', globalInputAvailable)
-    onboardingAccessibilityButton.textContent = globalInputAvailable
-      ? 'Разрешено'
-      : 'Разрешить'
-    permissionNote.textContent =
-      'Cure Voicer видит только нажатие выбранной клавиши и не читает содержимое приложений.'
-  } else {
-    accessibilityTitle.textContent = 'Горячая клавиша Windows'
-    accessibilityDetail.textContent = 'Работает глобально без отдельного системного разрешения'
-    onboardingAccessibilityButton.classList.add('is-granted')
-    onboardingAccessibilityButton.textContent = 'Готово'
-    permissionNote.textContent =
-      'В Windows понадобится только разрешение на микрофон. Аудио остаётся на компьютере.'
-  }
+  onboardingController.update({
+    platform: appPlatform,
+    globalInputAvailable,
+    microphonePermission: microphonePermissionGranted
+      ? 'granted'
+      : microphonePermissionDenied
+        ? 'denied'
+        : 'unknown'
+  })
 }
 
 async function requestOnboardingMicrophone(): Promise<boolean> {
@@ -638,26 +549,30 @@ async function requestOnboardingAccessibility(): Promise<void> {
   try {
     globalInputAvailable = (await api?.requestGlobalInputAccess()) ?? true
     if (!globalInputAvailable) {
-      permissionNote.textContent =
-        'Включите Cure Voicer в Системных настройках, вернитесь сюда и нажмите ещё раз.'
+      onboardingController.update({
+        permissionMessage: i18n.translate('onboarding.permissionOpenMac')
+      })
     }
   } catch (error) {
-    permissionNote.textContent = error instanceof Error ? error.message : String(error)
+    onboardingController.update({
+      permissionMessage: error instanceof Error ? error.message : String(error)
+    })
   }
   renderOnboardingPermissions()
   renderPreferences()
 }
 
 async function finishOnboarding(): Promise<void> {
-  onboardingNextButton.disabled = true
+  onboardingController.update({ busy: true })
   try {
     if (!microphonePermissionGranted) {
       const granted = await requestOnboardingMicrophone()
       if (!granted) {
         renderOnboardingStep(1)
-        permissionNote.textContent =
-          'Разрешите доступ к микрофону — без него диктовка не сможет начать запись.'
-        onboardingNextButton.disabled = false
+        onboardingController.update({
+          busy: false,
+          permissionMessage: i18n.translate('onboarding.permissionRequiredMicrophone')
+        })
         return
       }
     }
@@ -666,9 +581,10 @@ async function finishOnboarding(): Promise<void> {
       globalInputAvailable = (await api?.getAppInfo())?.globalInputAvailable ?? true
       if (!globalInputAvailable) {
         renderOnboardingStep(1)
-        permissionNote.textContent =
-          'Для запуска удержанием включите Cure Voicer в разделе «Универсальный доступ».'
-        onboardingNextButton.disabled = false
+        onboardingController.update({
+          busy: false,
+          permissionMessage: i18n.translate('onboarding.permissionRequiredAccessibility')
+        })
         return
       }
     }
@@ -676,11 +592,14 @@ async function finishOnboarding(): Promise<void> {
     if (api) preferences = await api.completeOnboarding()
     else preferences = { ...preferences, onboardingCompleted: true }
     renderPreferences()
-    onboarding.hidden = true
-    if (onboardingIsFirstRun) window.close()
+    const wasFirstRun = onboardingController.getSnapshot().firstRun
+    onboardingController.hide()
+    if (wasFirstRun) window.close()
   } catch (error) {
-    onboardingNextButton.disabled = false
-    permissionNote.textContent = error instanceof Error ? error.message : String(error)
+    onboardingController.update({
+      busy: false,
+      permissionMessage: error instanceof Error ? error.message : String(error)
+    })
   }
 }
 
@@ -1004,22 +923,16 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
 
 recordButton.addEventListener('click', () => void toggleRecording())
 restartOnboardingButton.addEventListener('click', () => showOnboarding(false))
-onboardingBackButton.addEventListener('click', () =>
-  renderOnboardingStep(onboardingStep - 1)
-)
-onboardingNextButton.addEventListener('click', () => {
-  if (onboardingStep === onboardingSteps.length - 1) void finishOnboarding()
-  else renderOnboardingStep(onboardingStep + 1)
+onboardingController.configure({
+  requestMicrophone: async () => {
+    await requestOnboardingMicrophone()
+  },
+  requestAccessibility: requestOnboardingAccessibility,
+  toggleRecording,
+  finish: finishOnboarding
 })
-onboardingMicrophoneButton.addEventListener('click', () =>
-  void requestOnboardingMicrophone()
-)
-onboardingAccessibilityButton.addEventListener('click', () =>
-  void requestOnboardingAccessibility()
-)
-onboardingTestButton.addEventListener('click', () => void toggleRecording())
 window.addEventListener('focus', () => {
-  if (!onboarding.hidden && microphonePermissionDenied) {
+  if (onboardingController.getSnapshot().visible && microphonePermissionDenied) {
     microphonePermissionDenied = false
     renderOnboardingPermissions()
   }
@@ -1232,12 +1145,15 @@ if (api) {
     renderVocabulary()
     renderHistory()
     renderOverlayPlacement(info.overlayPlacement)
-    onboardingHoldKeyGlyph.textContent = holdKeyGlyphFor(preferences.holdKey)
-    onboardingHoldKeyLabel.textContent = formatHoldKey(preferences.holdKey, appPlatform)
+    onboardingController.update({
+      platform: appPlatform,
+      holdKeyGlyph: holdKeyGlyphFor(preferences.holdKey),
+      holdKeyLabel: formatHoldKey(preferences.holdKey, appPlatform)
+    })
     renderOnboardingPermissions()
     void populateMicrophones()
     if (!preferences.onboardingCompleted) showOnboarding(true)
-    else onboarding.hidden = true
+    else onboardingController.hide()
   })
     .catch(showError)
 } else {

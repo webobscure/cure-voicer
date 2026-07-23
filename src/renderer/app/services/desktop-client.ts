@@ -48,7 +48,10 @@ export interface DesktopClient {
 }
 
 export class ElectronDesktopClient implements DesktopClient {
-  constructor(private readonly api: CureVoicerApi) {}
+  constructor(
+    private readonly api: CureVoicerApi,
+    private readonly onPreferencesChanged: (preferences: AppInfo['preferences']) => void = () => undefined
+  ) {}
 
   async getDiagnostics(): Promise<DiagnosticsViewModel> {
     const [info, report]: [AppInfo, DiagnosticReport] = await Promise.all([
@@ -105,7 +108,10 @@ export class ElectronDesktopClient implements DesktopClient {
   updatePreferences(
     patch: Partial<AppInfo['preferences']>
   ): Promise<AppInfo['preferences']> {
-    return this.api.updatePreferences(patch)
+    return this.api.updatePreferences(patch).then((preferences) => {
+      this.onPreferencesChanged(preferences)
+      return preferences
+    })
   }
 
   async getTemplates(): Promise<TextTemplate[]> {
@@ -133,7 +139,10 @@ export class ElectronDesktopClient implements DesktopClient {
   }
 
   importSettings(): Promise<AppInfo['preferences'] | null> {
-    return this.api.importSettings()
+    return this.api.importSettings().then((preferences) => {
+      if (preferences) this.onPreferencesChanged(preferences)
+      return preferences
+    })
   }
 
   getDiagnosticReport(): Promise<DiagnosticReport> {

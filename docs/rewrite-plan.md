@@ -223,8 +223,10 @@ Status: **in progress**
 - [x] Add templates, pinned fragments and optional clipboard history.
 - [x] Add sensitive-data heuristics, application exclusions and retention TTL.
 - [x] Add import/export with schema validation and secret exclusion.
-- [ ] Complete Russian/English localization and theme handling.
-- [ ] Migrate onboarding and settings to feature-based React pages.
+- [x] Complete system/light/dark theme handling, including live OS changes.
+- [ ] Complete Russian/English localization across every renderer surface.
+- [x] Migrate onboarding to a feature-based React page and controller.
+- [ ] Migrate the remaining legacy settings panels to feature-based React pages.
 
 SQLite is now the source of truth; the legacy JSON file is read only for a
 one-time, idempotent import and is not deleted. Clipboard history never polls the
@@ -232,6 +234,13 @@ system clipboard: it records only explicit Cure Voicer copy results after opt-in
 applies retention on reads, and rejects credential/private-key/payment-card
 patterns and excluded applications. Templates support pinning, search and
 optional global insertion shortcuts.
+
+The onboarding flow is now a React feature backed by a framework-independent
+controller. It no longer mutates a parallel tree of imperative DOM elements.
+The shared typed localization store currently covers the complete onboarding
+flow and is the migration path for the remaining settings surfaces. Explicit
+light/dark preferences override the OS correctly, while the system preference
+tracks live color-scheme changes.
 
 ## Stage 8 — hardening, diagnostics and release
 

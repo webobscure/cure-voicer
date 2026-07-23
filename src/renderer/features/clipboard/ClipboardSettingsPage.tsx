@@ -17,15 +17,6 @@ export function ClipboardSettingsPage({ client }: { client: DesktopClient }): Re
   const update = async (patch: Partial<AppPreferences>): Promise<void> => {
     try {
       setPreferences(await client.updatePreferences(patch))
-      if (patch.theme) {
-        document.documentElement.dataset.theme = patch.theme
-        document.documentElement.style.colorScheme = patch.theme === 'system' ? 'light dark' : patch.theme
-      }
-      if (patch.locale) {
-        document.documentElement.lang = patch.locale === 'system'
-          ? navigator.language.toLocaleLowerCase().startsWith('ru') ? 'ru' : 'en'
-          : patch.locale
-      }
       setItems(await client.getClipboardHistory())
       setStatus('Настройки сохранены')
     } catch (error) {

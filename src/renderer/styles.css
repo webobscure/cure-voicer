@@ -701,7 +701,7 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
 @keyframes orb-pulse { 50% { transform: scale(1.045); box-shadow: 0 8px 26px rgba(0, 122, 255, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.15); } }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --accent: #0a84ff;
     --label: rgba(255, 255, 255, 0.92);
     --secondary: rgba(235, 235, 245, 0.65);
@@ -713,12 +713,12 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
     --control: rgba(118, 118, 128, 0.22);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 14px 38px rgba(0, 0, 0, 0.16);
   }
-  .status-card,
-  .settings-group,
-  .model-card,
-  .history-card { border-color: rgba(255, 255, 255, 0.075); }
-  .test-button { border-color: rgba(255, 255, 255, 0.1); background: rgba(118, 118, 128, 0.2); }
-  .test-button:hover { background: rgba(118, 118, 128, 0.3); }
+  :root:not([data-theme='light']) .status-card,
+  :root:not([data-theme='light']) .settings-group,
+  :root:not([data-theme='light']) .model-card,
+  :root:not([data-theme='light']) .history-card { border-color: rgba(255, 255, 255, 0.075); }
+  :root:not([data-theme='light']) .test-button { border-color: rgba(255, 255, 255, 0.1); background: rgba(118, 118, 128, 0.2); }
+  :root:not([data-theme='light']) .test-button:hover { background: rgba(118, 118, 128, 0.3); }
 }
 
 :root[data-theme='dark'] {
@@ -733,6 +733,12 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
   --control: rgba(118, 118, 128, 0.26);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 14px 38px rgba(0, 0, 0, 0.16);
 }
+:root[data-theme='dark'] .status-card,
+:root[data-theme='dark'] .settings-group,
+:root[data-theme='dark'] .model-card,
+:root[data-theme='dark'] .history-card { border-color: rgba(255, 255, 255, 0.075); }
+:root[data-theme='dark'] .test-button { border-color: rgba(255, 255, 255, 0.1); background: rgba(118, 118, 128, 0.2); }
+:root[data-theme='dark'] .test-button:hover { background: rgba(118, 118, 128, 0.3); }
 :root[data-theme='light'] { color-scheme: light; }
 
 @media (max-width: 800px) {
@@ -843,14 +849,18 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
 .onboarding-next { margin-left: auto; color: white; background: linear-gradient(#1689fb, #0878e8); box-shadow: 0 3px 9px rgba(0, 94, 204, 0.2); }
 .onboarding-back[hidden] + .onboarding-next { margin-right: auto; }
 
+:root[data-theme='dark'] .onboarding { background: radial-gradient(circle at 18% 12%, rgba(35, 113, 211, 0.27), transparent 38%), radial-gradient(circle at 82% 84%, rgba(97, 69, 188, 0.2), transparent 42%), rgba(20, 23, 30, 0.88); }
+:root[data-theme='dark'] .onboarding-panel { border-color: rgba(255, 255, 255, 0.1); background: rgba(35, 37, 43, 0.76); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34); }
+:root[data-theme='dark'] .shortcut-key { background: linear-gradient(rgba(92,92,98,.7), rgba(52,52,57,.8)); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+
 @keyframes onboarding-in { from { transform: translateY(8px); opacity: 0; } }
 @keyframes welcome-float { 50% { transform: translateY(-5px) scale(1.018); } }
 @keyframes model-pulse { 50% { transform: scale(.72); opacity: .65; } }
 
 @media (prefers-color-scheme: dark) {
-  .onboarding { background: radial-gradient(circle at 18% 12%, rgba(35, 113, 211, 0.27), transparent 38%), radial-gradient(circle at 82% 84%, rgba(97, 69, 188, 0.2), transparent 42%), rgba(20, 23, 30, 0.88); }
-  .onboarding-panel { border-color: rgba(255, 255, 255, 0.1); background: rgba(35, 37, 43, 0.76); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34); }
-  .shortcut-key { background: linear-gradient(rgba(92,92,98,.7), rgba(52,52,57,.8)); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+  :root:not([data-theme='light']) .onboarding { background: radial-gradient(circle at 18% 12%, rgba(35, 113, 211, 0.27), transparent 38%), radial-gradient(circle at 82% 84%, rgba(97, 69, 188, 0.2), transparent 42%), rgba(20, 23, 30, 0.88); }
+  :root:not([data-theme='light']) .onboarding-panel { border-color: rgba(255, 255, 255, 0.1); background: rgba(35, 37, 43, 0.76); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34); }
+  :root:not([data-theme='light']) .shortcut-key { background: linear-gradient(rgba(92,92,98,.7), rgba(52,52,57,.8)); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 }
 
 @media (max-height: 590px) {
