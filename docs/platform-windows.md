@@ -18,3 +18,10 @@ Microphone permission is managed by Windows privacy settings. Distribution
 builds use per-user NSIS and portable x64 targets. Production releases should be
 Authenticode-signed to reduce SmartScreen warnings; SmartScreen reputation
 cannot be bypassed safely in application code.
+
+The Windows workflow passes `WINDOWS_CSC_LINK` and
+`WINDOWS_CSC_KEY_PASSWORD` to electron-builder. Tagged production builds should
+configure both repository secrets and verify the resulting signature before
+distribution. Signing establishes publisher identity but does not instantly
+guarantee SmartScreen reputation; EV signing or reputation accumulated over
+time may still be required.

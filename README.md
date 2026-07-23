@@ -68,6 +68,12 @@ Build an unsigned macOS Apple Silicon DMG and ZIP:
 npm run pack:mac
 ```
 
+Tagged release builds use `.github/workflows/macos-build.yml` and
+`.github/workflows/windows-build.yml`. Required signing secret names and the
+fail-closed verification steps are documented in
+[`docs/platform-macos.md`](docs/platform-macos.md) and
+[`docs/platform-windows.md`](docs/platform-windows.md).
+
 Build Windows x64 portable and NSIS packages on Windows:
 
 ```bash

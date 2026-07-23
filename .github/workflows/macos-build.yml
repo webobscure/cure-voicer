@@ -1,0 +1,105 @@
+name: macOS arm64 release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source
+        run: npm run check
+
+      - name: Run Electron E2E
+        run: npm run test:e2e
+
+      - name: Require signing credentials for tagged releases
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$APPLE_API_KEY_ID"
+          test -n "$APPLE_API_ISSUER"
+          test -n "$APPLE_API_KEY_P8"
+
+      - name: Prepare App Store Connect API key
+        if: env.APPLE_API_KEY_P8 != ''
+        run: |
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+
+      - name: Build macOS DMG and ZIP
+        run: npm run pack:mac
+
+      - name: Verify Developer ID signature
+        if: env.CSC_LINK != ''
+        run: |
+          codesign --verify --deep --strict --verbose=2 "release/mac-arm64/Cure Voicer.app"
+          spctl --assess --type execute --verbose=4 "release/mac-arm64/Cure Voicer.app"
+
+      - name: Verify stapled notarization ticket
+        if: env.APPLE_API_KEY_P8 != ''
+        run: xcrun stapler validate "release/mac-arm64/Cure Voicer.app"
+
+      - name: Smoke-test packaged macOS app
+        run: |
+          profile="$RUNNER_TEMP/cure-voicer-packaged-smoke"
+          mkdir -p "$profile"
+          CURE_VOICER_SMOKE_TEST=1 CURE_VOICER_SMOKE_USER_DATA="$profile" \
+            "release/mac-arm64/Cure Voicer.app/Contents/MacOS/Cure Voicer"
+
+      - name: Generate SHA-256 checksums
+        run: shasum -a 256 release/*.dmg release/*.zip > release/SHA256SUMS-macos.txt
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: cure-voicer-macos-arm64
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/SHA256SUMS-macos.txt
+          if-no-files-found: error
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=(release/*.dmg release/*.zip release/SHA256SUMS-macos.txt)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --generate-notes --prerelease
+          fi

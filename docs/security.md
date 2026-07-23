@@ -96,12 +96,14 @@ and fallback fact—not payload content.
 - Fail to editor/copy with an actionable diagnostic when privilege boundaries or
   target restrictions prevent insertion.
 
-## Release security backlog
+## Release security status
 
-- Add macOS entitlements, hardened runtime, signing and notarization.
-- Add Windows Authenticode signing and integrity-level diagnostics.
-- Configure signed auto-updates with rollback policy.
-- Add dependency scanning and produce an SBOM for releases.
+- macOS hardened-runtime entitlements, Developer ID signing input, explicit
+  notarization/stapling hook and release verification workflow are configured.
+- Windows Authenticode inputs and integrity-level diagnostics are configured.
+- Signed auto-updates use a fail-closed rollout and rollback policy.
+- Production dependency auditing and artifact checksums run before release;
+  generating a formal SBOM remains optional release-process work.
 
 Automatic installation of updates remains disabled until both platform artifacts
 are signed and the release feed can be cryptographically trusted. The app must

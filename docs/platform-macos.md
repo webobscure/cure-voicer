@@ -28,3 +28,18 @@ The repository supplies hardened-runtime entitlements, microphone and Apple
 Events usage descriptions; CI/release credentials must provide signing identity
 and Apple notarization credentials. Unsigned local DMGs are development artifacts
 and must not be offered through automatic update.
+
+The `afterSign` hook notarizes the signed `.app` with `notarytool`, staples the
+ticket, validates it, and only then lets electron-builder create the DMG and ZIP.
+Local builds skip the hook when credentials are absent. Tagged CI releases fail
+closed unless all signing secrets are present:
+
+- `MACOS_CSC_LINK`: base64/P12 Developer ID Application certificate accepted by electron-builder;
+- `MACOS_CSC_KEY_PASSWORD`: certificate password;
+- `APPLE_API_KEY_P8`: App Store Connect API private-key contents;
+- `APPLE_API_KEY_ID`: API key ID;
+- `APPLE_API_ISSUER`: API issuer ID.
+
+The macOS workflow verifies `codesign`, Gatekeeper assessment and the stapled
+ticket before uploading artifacts. These checks cannot be completed locally
+without the project owner's Apple Developer credentials.

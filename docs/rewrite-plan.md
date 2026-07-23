@@ -256,7 +256,7 @@ the same locale preference without adding Node access to its renderer.
 
 ## Stage 8 — hardening, diagnostics and release
 
-Status: **in progress**
+Status: **source complete; credential verification pending**
 
 - [x] Complete threat model and security documentation.
 - [x] Store API secrets with `safeStorage`; add explicit cloud consent.
@@ -264,7 +264,7 @@ Status: **in progress**
 - [x] Add user-data deletion and model/cache controls.
 - [x] Add IPC integration, Electron smoke and Playwright E2E suites.
 - [x] Test packaged macOS/Windows builds and native runtime loading.
-- [ ] Configure macOS entitlements/signing/notarization and Windows signing.
+- [x] Configure macOS entitlements/signing/notarization and Windows signing inputs.
 - [x] Add signed auto-update policy with staged rollout and rollback notes.
 - [x] Finish all extension and platform documentation.
 
@@ -284,8 +284,11 @@ portable/NSIS packaging, packaged-app smoke launch, checksum generation and
 artifact upload. The workflow accepts optional Authenticode secrets. The signed
 update rollout/rollback policy is documented and enforced: update checks remain
 disabled when the installed application does not have a valid package signature.
-Actual macOS notarization and Windows Authenticode verification remain blocked
-on release credentials rather than source implementation.
+The macOS release workflow now fails closed for tags without a Developer ID
+certificate and App Store Connect API key, notarizes and staples the signed app
+before installer creation, and verifies codesign, Gatekeeper and the ticket.
+Actual macOS notarization and Windows Authenticode verification remain external
+release checks blocked on project-owner credentials rather than source work.
 
 ## Validation required after every stage
 

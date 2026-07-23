@@ -5,6 +5,7 @@ asar: true
 # Rebuilding them is unnecessary and currently breaks on the Windows 2026
 # runner because uiohook's node-gyp cannot detect Visual Studio 18 yet.
 npmRebuild: false
+afterSign: scripts/notarize.mjs
 
 directories:
   output: release
@@ -53,6 +54,8 @@ mac:
   category: public.app-category.productivity
   icon: assets/branding/cure-voicer.icns
   hardenedRuntime: true
+  # The explicit afterSign hook notarizes and staples before DMG/ZIP creation.
+  notarize: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
