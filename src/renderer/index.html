@@ -101,6 +101,8 @@
 
         <div class="content-scroll">
           <section class="settings-pane is-active" data-pane="general">
+            <div id="generalReactRoot"></div>
+            <div class="legacy-core-settings" hidden>
             <article class="status-card">
               <div class="mini-orb" aria-hidden="true">
                 <img class="mini-brand-logo" alt="" draggable="false" />
@@ -205,9 +207,12 @@
                 <button class="model-retry" id="restartOnboardingButton" type="button">Открыть</button>
               </div>
             </div>
+            </div>
           </section>
 
           <section class="settings-pane" data-pane="dictation" hidden>
+            <div id="dictationReactRoot"></div>
+            <div class="legacy-core-settings" hidden>
             <div class="dictation-heading">
               <div class="empty-pane-icon blue"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></div>
               <div><h2>Плавающий индикатор</h2><p>Положение и поведение голосовой сферы</p></div>
@@ -251,6 +256,7 @@
                 <div class="setting-copy"><strong>Хранить аудиозаписи</strong><span>Сохранять локальные WAV после распознавания</span></div>
                 <label class="toggle-control"><input id="keepRecordingsToggle" type="checkbox" /><span></span></label>
               </div>
+            </div>
             </div>
           </section>
 

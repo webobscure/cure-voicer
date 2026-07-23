@@ -3,21 +3,19 @@ import type {
   AppPreferences,
   CureVoicerApi,
   HoldKey,
-  OverlayMotion,
   OverlayPlacement,
-  OverlayPlacementMode,
   RecordingState,
   SmartCorrectionStatus
 } from '../shared/contracts'
 import { AudioRecorder } from './audio-recorder'
 import { SilenceDetector } from '../modules/dictation/silence-detector'
 import { mountReactFeatures } from './app/bootstrap'
-import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
 import { AppearanceController } from './app/appearance'
 import { I18nStore } from './app/i18n/i18n-store'
 import { onboardingController } from './features/onboarding/onboarding-controller'
 import { settingsDataStore } from './app/settings-data-store'
 import { modelSettingsStore } from './app/model-settings-store'
+import { coreSettingsController } from './app/core-settings-controller'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
 const i18n = new I18nStore('system', navigator.language)
@@ -29,42 +27,13 @@ const appearance = new AppearanceController(
 appearance.start()
 mountReactFeatures(api, i18n, applyAppearance)
 
-const recordButton = getElement<HTMLButtonElement>('recordButton')
-const statusLabel = getElement('statusLabel')
-const statusDetail = getElement('statusDetail')
 const resultText = getElement('resultText')
 const resultPath = getElement('resultPath')
-const engineLabel = getElement('engineLabel')
 const versionLabel = getElement('versionLabel')
 const pageTitle = getElement('pageTitle')
 const pageSubtitle = getElement('pageSubtitle')
-const levelBars = Array.from(document.querySelectorAll<HTMLElement>('#levelMeter span'))
 const navItems = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-nav]'))
 const panes = Array.from(document.querySelectorAll<HTMLElement>('[data-pane]'))
-const placementHint = getElement('placementHint')
-const placementButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-placement]')
-)
-const miniBrandLogo = document.querySelector<HTMLImageElement>('.mini-brand-logo')
-const activationModeButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-activation-mode]')
-)
-const holdKeyButton = getElement<HTMLButtonElement>('holdKeyButton')
-const holdKeyGlyph = getElement('holdKeyGlyph')
-const holdKeyButtonLabel = getElement('holdKeyButtonLabel')
-const holdKeyHint = getElement('holdKeyHint')
-const hotkeySelect = getElement<HTMLSelectElement>('hotkeySelect')
-const microphoneSelect = getElement<HTMLSelectElement>('microphoneSelect')
-const autoStopSilenceSelect = getElement<HTMLSelectElement>('autoStopSilenceSelect')
-const autoPasteToggle = getElement<HTMLInputElement>('autoPasteToggle')
-const insertionModeSelect = getElement<HTMLSelectElement>('insertionModeSelect')
-const launchAtLoginToggle = getElement<HTMLInputElement>('launchAtLoginToggle')
-const showOverlayToggle = getElement<HTMLInputElement>('showOverlayToggle')
-const keepRecordingsToggle = getElement<HTMLInputElement>('keepRecordingsToggle')
-const motionSelect = getElement<HTMLSelectElement>('motionSelect')
-const restartOnboardingButton = getElement<HTMLButtonElement>('restartOnboardingButton')
-
-if (miniBrandLogo) miniBrandLogo.src = brandLogoUrl
 
 let state: RecordingState = 'idle'
 let recordingStartedAt = 0
@@ -133,16 +102,8 @@ const silenceDetector = new SilenceDetector(() => {
 
 async function setState(nextState: RecordingState): Promise<void> {
   state = nextState
+  coreSettingsController.update({ recordingState: nextState, recordingDetail: '' })
   document.body.dataset.state = nextState
-  const [label, detail] = getStateCopy(nextState)
-  statusLabel.textContent = label
-  statusDetail.textContent = detail
-  recordButton.disabled = nextState === 'starting' || nextState === 'transcribing'
-  recordButton.textContent = nextState === 'recording' ? 'Остановить' : 'Проверить'
-  recordButton.setAttribute(
-    'aria-label',
-    nextState === 'recording' ? 'Остановить запись' : 'Начать запись'
-  )
   onboardingController.update({ recordingState: nextState })
   if (api) await api.setRecordingState(nextState)
 }
@@ -239,10 +200,12 @@ async function finishRecording(): Promise<void> {
       if (onboardingController.getSnapshot().visible) {
         onboardingController.update({ transcript: result.transcript })
       }
-      statusDetail.textContent =
-        result.insertion === 'pasted'
-          ? `Вставлено · ${result.latencyMs} мс`
-          : `Скопировано в буфер · ${result.latencyMs} мс`
+      coreSettingsController.update({
+        recordingDetail: i18n.translate(
+          result.insertion === 'pasted' ? 'general.insertedResult' : 'general.copiedResult',
+          { latency: result.latencyMs }
+        )
+      })
     } else {
       resultText.textContent =
         'Речь не распознана. Попробуйте говорить немного ближе к микрофону.'
@@ -310,9 +273,13 @@ function startRecordingTimer(): void {
     const seconds = elapsedSeconds % 60
     const finishHint =
       preferences.activationMode === 'hold'
-        ? `Отпустите ${formatHoldKey(preferences.holdKey, appPlatform)}`
-        : 'Нажмите, чтобы закончить'
-    statusDetail.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} · ${finishHint}`
+        ? i18n.translate('general.releaseToFinish', {
+            key: formatHoldKey(preferences.holdKey, appPlatform)
+          })
+        : i18n.translate('general.pressToFinish')
+    coreSettingsController.update({
+      recordingDetail: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} · ${finishHint}`
+    })
   }
 
   renderElapsedTime()
@@ -326,13 +293,7 @@ function stopRecordingTimer(): void {
 
 function updateLevel(level: number): void {
   silenceDetector.observe(level)
-  const activeBars = Math.round(level * levelBars.length)
-  levelBars.forEach((bar, index) => {
-    const distance = Math.abs(index - Math.floor(levelBars.length / 2))
-    const visualIndex = levelBars.length - distance * 2
-    bar.style.setProperty('--level', String(index < activeBars ? 1 : 0.18))
-    bar.style.setProperty('--height', `${Math.max(8, visualIndex * 1.5)}px`)
-  })
+  coreSettingsController.update({ audioLevel: level })
 
   const now = performance.now()
   if (level === 0 || now - lastAudioLevelSentAt >= 32) {
@@ -376,53 +337,19 @@ api?.onInternalEditorText(() => selectPane('editor'))
 api?.onSettingsNavigate((pane) => selectPane(pane))
 
 function renderOverlayPlacement(placement: OverlayPlacement): void {
-  placementButtons.forEach((button) => {
-    button.classList.toggle('is-active', button.dataset.placement === placement.mode)
-  })
-
-  const labels: Record<OverlayPlacementMode, string> = {
-    'bottom-left': 'Слева снизу',
-    'bottom-center': 'По центру снизу',
-    'bottom-right': 'Справа снизу',
-    custom: 'Своя позиция · перетащено вручную'
-  }
-  placementHint.textContent = labels[placement.mode]
+  coreSettingsController.update({ overlayPlacement: placement })
 }
 
 function renderPreferences(): void {
   applyAppearance(preferences)
-  activationModeButtons.forEach((button) => {
-    button.setAttribute(
-      'aria-pressed',
-      String(button.dataset.activationMode === preferences.activationMode)
-    )
+  coreSettingsController.update({
+    preferences,
+    platform: appPlatform,
+    globalInputAvailable,
+    holdKeyCaptureActive: isCapturingHoldKey,
+    asrStatus,
+    error: ''
   })
-  hotkeySelect.value = preferences.accelerator
-  holdKeyButton.disabled = preferences.activationMode !== 'hold'
-  holdKeyButton.classList.toggle(
-    'needs-permission',
-    preferences.activationMode === 'hold' && !globalInputAvailable
-  )
-  holdKeyGlyph.textContent = holdKeyGlyphFor(preferences.holdKey)
-  holdKeyButtonLabel.textContent = formatHoldKey(preferences.holdKey, appPlatform)
-  if (!isCapturingHoldKey) {
-    holdKeyHint.textContent =
-      preferences.activationMode === 'hold'
-        ? globalInputAvailable
-          ? 'Нажмите справа, затем нажмите нужную клавишу'
-          : 'Разрешите Cure Voicer в macOS → Универсальный доступ'
-        : 'Доступно в режиме удержания'
-  }
-  hotkeySelect.disabled = preferences.activationMode !== 'toggle'
-  microphoneSelect.value = preferences.microphoneId
-  autoStopSilenceSelect.value = String(preferences.autoStopSilenceMs)
-  autoPasteToggle.checked = preferences.autoPaste
-  insertionModeSelect.value = preferences.insertionMode
-  insertionModeSelect.disabled = !preferences.autoPaste
-  launchAtLoginToggle.checked = preferences.launchAtLogin
-  showOverlayToggle.checked = preferences.showOverlayWhenIdle
-  keepRecordingsToggle.checked = preferences.keepRecordings
-  motionSelect.value = preferences.overlayMotion
   modelSettingsStore.update({ smartCorrectionEnabled: preferences.smartCorrectionEnabled })
   renderAsrStatus()
   renderSmartCorrectionStatus()
@@ -565,7 +492,7 @@ async function updatePreferences(patch: Partial<AppPreferences>): Promise<boolea
     return true
   } catch (error) {
     renderPreferences()
-    statusDetail.textContent = error instanceof Error ? error.message : String(error)
+    coreSettingsController.update({ error: error instanceof Error ? error.message : String(error) })
     return false
   }
 }
@@ -576,67 +503,39 @@ async function populateMicrophones(): Promise<void> {
     const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
       (device) => device.kind === 'audioinput'
     )
-    const options = [new Option('Системный', '')]
-    devices.forEach((device, index) => {
-      options.push(new Option(device.label || `Микрофон ${index + 1}`, device.deviceId))
+    coreSettingsController.update({
+      microphones: [
+        { id: '', label: 'System', available: true },
+        ...devices.map((device, index) => ({
+          id: device.deviceId,
+          label: device.label || `Microphone ${index + 1}`,
+          available: true
+        })),
+        ...(preferences.microphoneId && !devices.some((device) => device.deviceId === preferences.microphoneId)
+          ? [{ id: preferences.microphoneId, label: 'Unavailable microphone', available: false }]
+          : [])
+      ]
     })
-    microphoneSelect.replaceChildren(...options)
-    if (
-      preferences.microphoneId &&
-      !devices.some((device) => device.deviceId === preferences.microphoneId)
-    ) {
-      microphoneSelect.append(new Option('Недоступный микрофон', preferences.microphoneId))
-    }
-    microphoneSelect.value = preferences.microphoneId
   } catch (error) {
     console.warn('Could not enumerate microphones', error)
   }
 }
 
-function formatAccelerator(accelerator: string, platform: NodeJS.Platform): string {
-  return accelerator
-    .replace('CommandOrControl', platform === 'darwin' ? '⌘' : 'Ctrl')
-    .replace('Shift', platform === 'darwin' ? '⇧' : 'Shift')
-    .replace('Option', platform === 'darwin' ? '⌥' : 'Alt')
-    .replaceAll('+', ' ')
-}
-
-function getStateCopy(current: RecordingState): [string, string] {
-  const holdKeyLabel = formatHoldKey(preferences.holdKey, appPlatform)
-  const idleDetail =
-    preferences.activationMode === 'hold'
-      ? `Удерживайте ${holdKeyLabel} в любом поле ввода`
-      : 'Нажмите горячую клавишу в любом поле ввода'
-  const recordingDetail =
-    preferences.activationMode === 'hold'
-      ? `00:00 · Отпустите ${holdKeyLabel}, чтобы закончить`
-      : '00:00 · Нажмите, чтобы закончить'
-  const copy: Record<RecordingState, [string, string]> = {
-    idle: ['Готов к диктовке', idleDetail],
-    starting: ['Подключаем микрофон…', 'При первом запуске подтвердите разрешение'],
-    recording: ['Слушаю', recordingDetail],
-    transcribing: ['Распознаю речь…', 'Обработка выполняется на устройстве'],
-    error: ['Не удалось записать', 'Проверьте доступ к микрофону и повторите']
-  }
-  return copy[current]
-}
-
 function renderStateCopy(): void {
-  const [label, detail] = getStateCopy(state)
-  statusLabel.textContent = label
-  if (state !== 'recording' || !recordingTimer) statusDetail.textContent = detail
+  coreSettingsController.update({ recordingState: state })
 }
 
 function formatHoldKey(key: HoldKey, platform: NodeJS.Platform): string {
+  const russian = i18n.getSnapshot() === 'ru'
   const labels: Record<HoldKey, string> = {
-    'left-control': platform === 'darwin' ? 'Левый Control' : 'Левый Ctrl',
-    'right-control': platform === 'darwin' ? 'Правый Control' : 'Правый Ctrl',
-    'left-option': platform === 'darwin' ? 'Левый Option' : 'Левый Alt',
-    'right-option': platform === 'darwin' ? 'Правый Option' : 'Правый Alt',
-    'left-command': platform === 'darwin' ? 'Левый Command' : 'Левый Win',
-    'right-command': platform === 'darwin' ? 'Правый Command' : 'Правый Win',
-    'left-shift': 'Левый Shift',
-    'right-shift': 'Правый Shift',
+    'left-control': `${russian ? 'Левый' : 'Left'} ${platform === 'darwin' ? 'Control' : 'Ctrl'}`,
+    'right-control': `${russian ? 'Правый' : 'Right'} ${platform === 'darwin' ? 'Control' : 'Ctrl'}`,
+    'left-option': `${russian ? 'Левый' : 'Left'} ${platform === 'darwin' ? 'Option' : 'Alt'}`,
+    'right-option': `${russian ? 'Правый' : 'Right'} ${platform === 'darwin' ? 'Option' : 'Alt'}`,
+    'left-command': `${russian ? 'Левый' : 'Left'} ${platform === 'darwin' ? 'Command' : 'Win'}`,
+    'right-command': `${russian ? 'Правый' : 'Right'} ${platform === 'darwin' ? 'Command' : 'Win'}`,
+    'left-shift': `${russian ? 'Левый' : 'Left'} Shift`,
+    'right-shift': `${russian ? 'Правый' : 'Right'} Shift`,
     f6: 'F6',
     f7: 'F7',
     f8: 'F8',
@@ -680,30 +579,30 @@ function holdKeyFromCode(code: string): HoldKey | null {
 async function beginHoldKeyCapture(): Promise<void> {
   if (preferences.activationMode !== 'hold' || isCapturingHoldKey) return
   try {
-    holdKeyButton.disabled = true
     if (!globalInputAvailable) {
       globalInputAvailable = (await api?.requestGlobalInputAccess()) ?? true
       if (!globalInputAvailable) {
-        holdKeyButton.disabled = false
-        holdKeyHint.textContent =
-          'Разрешите Cure Voicer в macOS → Универсальный доступ, затем нажмите ещё раз'
+        coreSettingsController.update({
+          globalInputAvailable,
+          holdKeyStatus: i18n.translate('general.accessibilityRetry')
+        })
         return
       }
       await api?.setHotkeyCapture(false)
     }
     await api?.setHotkeyCapture(true)
     isCapturingHoldKey = true
-    holdKeyButton.disabled = false
-    holdKeyButton.classList.add('is-capturing')
-    holdKeyButtonLabel.textContent = 'Нажмите клавишу…'
-    holdKeyGlyph.textContent = '…'
-    holdKeyHint.textContent = 'Control, Option/Alt, Command/Win, Shift или F6–F12 · Esc — отмена'
+    coreSettingsController.update({
+      holdKeyCaptureActive: true,
+      holdKeyStatus: i18n.translate('general.captureInstruction')
+    })
     if (holdKeyCaptureTimer !== null) window.clearTimeout(holdKeyCaptureTimer)
     holdKeyCaptureTimer = window.setTimeout(() => void cancelHoldKeyCapture(), 10_000)
   } catch (error) {
-    holdKeyButton.disabled = false
-    holdKeyHint.textContent =
-      error instanceof Error ? error.message : 'Не удалось начать выбор клавиши'
+    coreSettingsController.update({
+      holdKeyCaptureActive: false,
+      holdKeyStatus: error instanceof Error ? error.message : i18n.translate('general.captureFailed')
+    })
   }
 }
 
@@ -714,13 +613,20 @@ async function finishHoldKeyCapture(key: HoldKey): Promise<void> {
   try {
     globalInputAvailable = (await api?.setHotkeyCapture(false)) ?? true
   } catch (error) {
-    holdKeyHint.textContent = error instanceof Error ? error.message : String(error)
+    coreSettingsController.update({
+      holdKeyStatus: error instanceof Error ? error.message : String(error)
+    })
     return
   }
   if (saved) {
-    holdKeyHint.textContent = globalInputAvailable
-      ? `${formatHoldKey(key, appPlatform)} назначен`
-      : 'Клавиша назначена. Разрешите Cure Voicer в macOS → Универсальный доступ'
+    const holdKeyStatus = globalInputAvailable
+      ? i18n.translate('general.keyAssigned', { key: formatHoldKey(key, appPlatform) })
+      : i18n.translate('general.keyAssignedNeedsAccess')
+    coreSettingsController.update({
+      globalInputAvailable,
+      holdKeyCaptureActive: false,
+      holdKeyStatus
+    })
   }
 }
 
@@ -735,7 +641,7 @@ function stopHoldKeyCaptureUi(): void {
   isCapturingHoldKey = false
   if (holdKeyCaptureTimer !== null) window.clearTimeout(holdKeyCaptureTimer)
   holdKeyCaptureTimer = null
-  holdKeyButton.classList.remove('is-capturing')
+  coreSettingsController.update({ holdKeyCaptureActive: false })
 }
 
 function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -744,8 +650,30 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
   return element as T
 }
 
-recordButton.addEventListener('click', () => void toggleRecording())
-restartOnboardingButton.addEventListener('click', () => showOnboarding(false))
+coreSettingsController.configure({
+  toggleRecording,
+  updatePreferences: async (patch) => {
+    if (isCapturingHoldKey && patch.activationMode && patch.activationMode !== 'hold') {
+      await cancelHoldKeyCapture()
+    }
+    return updatePreferences(patch)
+  },
+  beginHoldKeyCapture,
+  cancelHoldKeyCapture,
+  setOverlayPlacement: async (mode) => {
+    coreSettingsController.update({ overlayPlacementBusy: true })
+    try {
+      renderOverlayPlacement(api ? await api.setOverlayPlacement(mode) : { mode })
+    } catch (error) {
+      coreSettingsController.update({
+        error: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      coreSettingsController.update({ overlayPlacementBusy: false })
+    }
+  },
+  restartOnboarding: () => showOnboarding(false)
+})
 onboardingController.configure({
   requestMicrophone: async () => {
     await requestOnboardingMicrophone()
@@ -760,14 +688,6 @@ window.addEventListener('focus', () => {
     renderOnboardingPermissions()
   }
 })
-activationModeButtons.forEach((button) => {
-  button.addEventListener('click', async () => {
-    if (isCapturingHoldKey) await cancelHoldKeyCapture()
-    const activationMode = button.dataset.activationMode as AppPreferences['activationMode']
-    await updatePreferences({ activationMode })
-  })
-})
-holdKeyButton.addEventListener('click', () => void beginHoldKeyCapture())
 window.addEventListener(
   'keydown',
   (event) => {
@@ -780,7 +700,9 @@ window.addEventListener(
       }
       const key = holdKeyFromCode(event.code)
       if (key) void finishHoldKeyCapture(key)
-      else holdKeyHint.textContent = 'Эта клавиша не подходит. Используйте модификатор или F6–F12.'
+      else coreSettingsController.update({
+        holdKeyStatus: i18n.translate('general.invalidKey')
+      })
       return
     }
 
@@ -796,51 +718,8 @@ window.addEventListener(
   true
 )
 window.addEventListener('blur', () => void cancelHoldKeyCapture())
-hotkeySelect.addEventListener('change', () =>
-  void updatePreferences({ accelerator: hotkeySelect.value })
-)
-microphoneSelect.addEventListener('change', () =>
-  void updatePreferences({ microphoneId: microphoneSelect.value })
-)
-autoStopSilenceSelect.addEventListener('change', () =>
-  void updatePreferences({ autoStopSilenceMs: Number(autoStopSilenceSelect.value) })
-)
-autoPasteToggle.addEventListener('change', () =>
-  void updatePreferences({ autoPaste: autoPasteToggle.checked })
-)
-insertionModeSelect.addEventListener('change', () =>
-  void updatePreferences({
-    insertionMode: insertionModeSelect.value as AppPreferences['insertionMode']
-  })
-)
-launchAtLoginToggle.addEventListener('change', () =>
-  void updatePreferences({ launchAtLogin: launchAtLoginToggle.checked })
-)
-showOverlayToggle.addEventListener('change', () =>
-  void updatePreferences({ showOverlayWhenIdle: showOverlayToggle.checked })
-)
-keepRecordingsToggle.addEventListener('change', () =>
-  void updatePreferences({ keepRecordings: keepRecordingsToggle.checked })
-)
-motionSelect.addEventListener('change', () =>
-  void updatePreferences({ overlayMotion: motionSelect.value as OverlayMotion })
-)
 navItems.forEach((item) => {
   item.addEventListener('click', () => selectPane(item.dataset.nav ?? 'general'))
-})
-placementButtons.forEach((button) => {
-  button.addEventListener('click', async () => {
-    const mode = button.dataset.placement as Exclude<OverlayPlacementMode, 'custom'>
-    placementButtons.forEach((item) => (item.disabled = true))
-    try {
-      if (api) renderOverlayPlacement(await api.setOverlayPlacement(mode))
-      else renderOverlayPlacement({ mode })
-    } catch (error) {
-      console.error('Could not update overlay placement', error)
-    } finally {
-      placementButtons.forEach((item) => (item.disabled = false))
-    }
-  })
 })
 if (api) {
   api.onRecordingCommand((command) => void handleRecordingCommand(command))
@@ -857,12 +736,11 @@ if (api) {
     document.body.dataset.platform = info.platform
     appPlatform = info.platform
     globalInputAvailable = info.globalInputAvailable
-    versionLabel.textContent = `Cure Voicer ${info.version}`
-    Array.from(hotkeySelect.options).forEach((option) => {
-      option.textContent = formatAccelerator(option.value, info.platform)
+    coreSettingsController.update({
+      platform: info.platform,
+      globalInputAvailable: info.globalInputAvailable
     })
-    engineLabel.textContent =
-      info.asrEngine === 'not-configured' ? 'ASR не подключён' : info.asrEngine
+    versionLabel.textContent = `Cure Voicer ${info.version}`
     preferences = info.preferences
     smartCorrectionStatus = info.smartCorrection
     asrStatus = info.asrStatus

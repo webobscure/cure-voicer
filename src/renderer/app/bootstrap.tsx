@@ -20,6 +20,9 @@ import { HistoryPage } from '../features/history/HistoryPage'
 import { settingsDataStore } from './settings-data-store'
 import { ModelsPage } from '../features/models/ModelsPage'
 import { modelSettingsStore } from './model-settings-store'
+import { GeneralSettingsPage } from '../features/settings/GeneralSettingsPage'
+import { DictationSettingsPage } from '../features/settings/DictationSettingsPage'
+import { coreSettingsController } from './core-settings-controller'
 
 let diagnosticsRoot: Root | null = null
 let editorRoot: Root | null = null
@@ -32,6 +35,8 @@ let onboardingRoot: Root | null = null
 let vocabularyRoot: Root | null = null
 let historyRoot: Root | null = null
 let modelsRoot: Root | null = null
+let generalRoot: Root | null = null
+let dictationRoot: Root | null = null
 
 export function mountReactFeatures(
   api: CureVoicerApi | undefined,
@@ -49,13 +54,23 @@ export function mountReactFeatures(
   const vocabularyContainer = document.getElementById('vocabularyReactRoot')
   const historyContainer = document.getElementById('historyReactRoot')
   const modelsContainer = document.getElementById('modelsReactRoot')
-  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer && !vocabularyContainer && !historyContainer && !modelsContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot || vocabularyRoot || historyRoot || modelsRoot) return
+  const generalContainer = document.getElementById('generalReactRoot')
+  const dictationContainer = document.getElementById('dictationReactRoot')
+  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer && !vocabularyContainer && !historyContainer && !modelsContainer && !generalContainer && !dictationContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot || vocabularyRoot || historyRoot || modelsRoot || generalRoot || dictationRoot) return
 
   if (onboardingContainer) {
     onboardingRoot = createRoot(onboardingContainer)
     onboardingRoot.render(
       <StrictMode><I18nProvider store={i18n}><OnboardingPage controller={onboardingController} logoUrl={brandLogoUrl} /></I18nProvider></StrictMode>
     )
+  }
+  if (generalContainer) {
+    generalRoot = createRoot(generalContainer)
+    generalRoot.render(<StrictMode><I18nProvider store={i18n}><GeneralSettingsPage controller={coreSettingsController} logoUrl={brandLogoUrl} /></I18nProvider></StrictMode>)
+  }
+  if (dictationContainer) {
+    dictationRoot = createRoot(dictationContainer)
+    dictationRoot.render(<StrictMode><I18nProvider store={i18n}><DictationSettingsPage controller={coreSettingsController} /></I18nProvider></StrictMode>)
   }
 
   if (!api) {

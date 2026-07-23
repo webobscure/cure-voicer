@@ -57,6 +57,12 @@ test('launches hardened settings UI and exposes only the typed preload surface',
     await page.getByRole('button', { name: 'Модели' }).click()
     await expect(page.getByText('Active model')).toBeVisible()
     await expect(page.getByText('Text correction')).toBeVisible()
+    await page.getByRole('button', { name: 'Основные' }).click()
+    await expect(page.locator('#generalReactRoot').getByText('Quick access')).toBeVisible()
+    await expect(page.locator('#generalReactRoot').getByText('Insertion method')).toBeVisible()
+    await page.getByRole('button', { name: 'Диктовка' }).click()
+    await expect(page.locator('#dictationReactRoot').getByText('Floating indicator')).toBeVisible()
+    await expect(page.locator('#dictationReactRoot').getByText('Screen position')).toBeVisible()
   } finally {
     await application.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
     await application.close().catch(() => undefined)

@@ -226,7 +226,7 @@ Status: **in progress**
 - [x] Complete system/light/dark theme handling, including live OS changes.
 - [ ] Complete Russian/English localization across every renderer surface.
 - [x] Migrate onboarding to a feature-based React page and controller.
-- [ ] Migrate the remaining legacy settings panels to feature-based React pages.
+- [x] Migrate the remaining legacy settings panels to feature-based React pages.
 
 SQLite is now the source of truth; the legacy JSON file is read only for a
 one-time, idempotent import and is not deleted. Clipboard history never polls the
@@ -245,6 +245,13 @@ The models page is also React-owned; ASR/Qwen status remains authoritative in
 main and reaches the page through a presentation-only external store. Explicit
 light/dark preferences override the OS correctly, while the system preference
 tracks live color-scheme changes.
+
+The General and Dictation panels are now React-owned as well. Recording,
+silence detection, microphone enumeration and native hold-key capture remain in
+the renderer service and publish presentation state through a typed external
+controller; React components do not call IPC directly. The former markup is
+kept hidden for one migration checkpoint and will be removed together with the
+static settings shell after the bilingual shell is verified.
 
 ## Stage 8 — hardening, diagnostics and release
 
