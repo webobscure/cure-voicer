@@ -8,6 +8,7 @@ npm run lint
 npm test
 npm run build
 npm run test:smoke
+npm run test:e2e
 ```
 
 `npm run check` runs typecheck, lint, unit tests and the production build. The
@@ -24,13 +25,15 @@ may require desktop permissions in a sandboxed development environment.
 - settings schema/default/migration tests;
 - renderer URL policy tests;
 - validated IPC handler tests;
-- structured log redaction tests.
+- structured log redaction tests;
 - dictation state-machine, stale operation and cancellation tests;
 - bounded PCM capture-session and silence detector tests;
 - transcription provider selection tests;
 - insertion provider/fallback/focus/security policy tests;
 - multi-format clipboard transaction, ownership and concurrency tests;
-- platform input capability and mixed-Unicode tests.
+- platform input capability and mixed-Unicode tests;
+- SQLite migration/retention and secret-vault tests;
+- Playwright Electron launch, renderer sandbox and preload-capability E2E.
 
 ## Required insertion scenarios
 

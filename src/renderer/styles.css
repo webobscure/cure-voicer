@@ -943,4 +943,7 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
 .clipboard-list button { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 11px 13px; border: .5px solid var(--separator); border-radius: 12px; color: var(--label); background: var(--card); text-align: left; }
 .clipboard-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clipboard-list small { color: var(--secondary); }
+.diagnostic-actions { display: flex; grid-column: 1 / -1; gap: 8px; }
+.diagnostic-actions button { min-height: 36px; border: 0; border-radius: 10px; padding: 0 13px; color: white; background: var(--accent); font-weight: 650; }
+.diagnostic-actions button.danger { color: #d13d31; background: rgba(255, 69, 58, .11); }
 @media (max-width: 900px) { .template-form { grid-template-columns: 1fr; } .template-form textarea { grid-column: 1; } }

@@ -13,12 +13,14 @@ import {
   screen,
   session,
   shell,
+  safeStorage,
   systemPreferences,
   Tray
 } from 'electron'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { uIOhook, UiohookKey, type UiohookKeyboardEvent } from 'uiohook-napi'
 import type {
@@ -59,11 +61,13 @@ import { LocalDatabase } from './storage/local-database'
 import { isPotentiallySensitiveText } from '../modules/clipboard/sensitive-text'
 import type { ClipboardHistoryItem, TextTemplate } from '../shared/contracts'
 import type { ActiveApplicationContext } from '../shared/types/insertion'
+import { SecretVault } from './security/secret-vault'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const smokeTestMode = process.env.CURE_VOICER_SMOKE_TEST === '1'
+const e2eTestMode = process.env.CURE_VOICER_E2E === '1'
 const smokeTestUserData = process.env.CURE_VOICER_SMOKE_USER_DATA
-if (smokeTestMode && smokeTestUserData && path.isAbsolute(smokeTestUserData)) {
+if ((smokeTestMode || e2eTestMode) && smokeTestUserData && path.isAbsolute(smokeTestUserData)) {
   app.setPath('userData', smokeTestUserData)
 }
 const rendererPolicy = new RendererPolicy({
@@ -124,6 +128,7 @@ let preferences: AppPreferences = {
   integrationRules: [],
   historyEnabled: false,
   clipboardHistoryEnabled: false,
+  cloudProcessingEnabled: false,
   clipboardRetentionDays: 7,
   theme: 'system',
   locale: 'system',
@@ -139,6 +144,7 @@ let history: DictationHistoryItem[] = []
 let templates: TextTemplate[] = []
 let clipboardHistory: ClipboardHistoryItem[] = []
 let localDatabase: LocalDatabase | null = null
+let secretVault: SecretVault | null = null
 let isQuitting = false
 let applicationResourcesDisposed = false
 let isProgrammaticOverlayMove = false
@@ -787,6 +793,21 @@ function registerIpc(): void {
     await saveAppState()
     overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
     return preferences
+  })
+
+  ipcMain.handle(IPC.getDiagnosticReport, async (event) => {
+    assertSettingsSender(event)
+    return createDiagnosticReport()
+  })
+
+  ipcMain.handle(IPC.copyDiagnosticReport, async (event) => {
+    assertSettingsSender(event)
+    clipboard.writeText(JSON.stringify(await createDiagnosticReport(), null, 2))
+  })
+
+  ipcMain.handle(IPC.deleteAllUserData, async (event) => {
+    assertSettingsSender(event)
+    await deleteAllUserData()
   })
 
   ipcMain.handle(IPC.copyText, async (event, text: string) => {
@@ -1497,6 +1518,10 @@ async function loadAppState(): Promise<void> {
           typeof stored.clipboardHistoryEnabled === 'boolean'
             ? stored.clipboardHistoryEnabled
             : false,
+        cloudProcessingEnabled:
+          typeof stored.cloudProcessingEnabled === 'boolean'
+            ? stored.cloudProcessingEnabled
+            : false,
         clipboardRetentionDays:
           typeof stored.clipboardRetentionDays === 'number' &&
           Number.isInteger(stored.clipboardRetentionDays) &&
@@ -1588,6 +1613,7 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     'autoPaste',
     'historyEnabled',
     'clipboardHistoryEnabled',
+    'cloudProcessingEnabled',
     'keepRecordings',
     'showOverlayWhenIdle',
     'smartCorrectionEnabled',
@@ -1789,6 +1815,74 @@ function databaseFilePath(): string {
   return path.join(app.getPath('userData'), 'cure-voicer.sqlite3')
 }
 
+async function createDiagnosticReport(): Promise<import('../shared/contracts').DiagnosticReport> {
+  const activeApplication = await activeApplications.getActiveApplication().catch(() => ({
+    platform: process.platform === 'darwin' || process.platform === 'win32' ? process.platform : 'unknown',
+    capturedAt: new Date().toISOString()
+  } as const))
+  const integration = await integrations.resolve(activeApplication, preferences.integrationRules)
+  const available = await insertion.availableModes({
+    operationId: randomUUID(),
+    requestedMode: preferences.insertionMode,
+    activeApplication,
+    blockedApplicationIds: preferences.blockedApplicationIds,
+    allowFallback: true
+  })
+  const microphone = process.platform === 'darwin' || process.platform === 'win32'
+    ? systemPreferences.getMediaAccessStatus('microphone')
+    : 'unknown'
+  return {
+    generatedAt: new Date().toISOString(),
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron ?? 'unknown',
+    nodeVersion: process.versions.node,
+    platform: process.platform,
+    architecture: process.arch,
+    osRelease: os.release(),
+    permissions: { microphone, globalInput: isGlobalInputAvailable() },
+    shortcuts: {
+      configured: Object.keys(preferences.shortcutBindings).length,
+      conflicts: [...shortcutConflicts]
+    },
+    insertion: { configured: preferences.insertionMode, available },
+    recognition: { provider: asrEngine.id, state: asrEngine.status.state },
+    activeIntegrationId: integration.integrationId,
+    protectedStorageAvailable: secretVault?.isAvailable() ?? false,
+    storage: {
+      historyEnabled: preferences.historyEnabled,
+      historyEntries: history.length,
+      clipboardHistoryEnabled: preferences.clipboardHistoryEnabled,
+      clipboardEntries: clipboardHistory.length,
+      templates: templates.length
+    }
+  }
+}
+
+async function deleteAllUserData(): Promise<void> {
+  cancelActiveDictation('delete-user-data')
+  localDatabase?.close()
+  localDatabase = null
+  const userData = path.resolve(app.getPath('userData'))
+  const targets = [
+    databaseFilePath(),
+    `${databaseFilePath()}-wal`,
+    `${databaseFilePath()}-shm`,
+    settingsFilePath(),
+    path.join(userData, 'recordings'),
+    path.join(userData, 'models'),
+    path.join(userData, 'secrets')
+  ]
+  for (const target of targets) {
+    const resolved = path.resolve(target)
+    if (resolved !== userData && !resolved.startsWith(`${userData}${path.sep}`)) {
+      throw new Error('Refused to remove a path outside the application data directory')
+    }
+    await rm(resolved, { recursive: true, force: true })
+  }
+  app.relaunch()
+  app.exit(0)
+}
+
 async function addClipboardHistoryItem(
   text: string,
   activeApplication?: ActiveApplicationContext
@@ -1889,6 +1983,11 @@ registerApplicationLifecycle({
     if (process.platform === 'win32') app.setAppUserModelId('com.curevoicer.desktop')
     if (process.platform === 'darwin') app.dock?.hide()
     await loadAppState()
+    secretVault = new SecretVault(path.join(app.getPath('userData'), 'secrets'), {
+      isAvailable: () => safeStorage.isEncryptionAvailable(),
+      encrypt: (value) => safeStorage.encryptString(value),
+      decrypt: (value) => safeStorage.decryptString(value)
+    })
     applyVoiceCommandPreferences()
 
     session.defaultSession.setPermissionRequestHandler(
@@ -1939,13 +2038,15 @@ registerApplicationLifecycle({
       return
     }
 
-    void asrEngine.prepare?.().catch((error) => {
-      console.error('Could not prepare local ASR engine', error)
-    })
-    if (preferences.smartCorrectionEnabled) {
-      void smartCorrectionService.prepare().catch((error) => {
-        console.warn('Could not prepare smart correction', error)
+    if (!e2eTestMode) {
+      void asrEngine.prepare?.().catch((error) => {
+        console.error('Could not prepare local ASR engine', error)
       })
+      if (preferences.smartCorrectionEnabled) {
+        void smartCorrectionService.prepare().catch((error) => {
+          console.warn('Could not prepare smart correction', error)
+        })
+      }
     }
 
     if (preferences.onboardingCompleted) {
@@ -1965,6 +2066,7 @@ registerApplicationLifecycle({
   willQuit: disposeApplicationResources,
   windowAllClosed: () => {
     // Tray apps intentionally stay alive on both desktop platforms.
+    if (e2eTestMode) app.quit()
   },
   fatal: (error) => {
     console.error('Cure Voicer failed to start', error)

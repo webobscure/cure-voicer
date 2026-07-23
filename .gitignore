@@ -3,6 +3,8 @@ out/
 dist/
 release/
 coverage/
+test-results/
+playwright-report/
 native/macos-asr/.build/
 .swiftpm/
 *.tsbuildinfo

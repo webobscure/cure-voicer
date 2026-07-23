@@ -2,6 +2,7 @@ import type {
   AppInfo,
   CureVoicerApi,
   EditorCommand,
+  DiagnosticReport,
   InternalEditorPayload,
   ClipboardHistoryItem,
   TextTemplate,
@@ -20,6 +21,7 @@ export interface DiagnosticsViewModel {
   onboardingCompleted: boolean
   currentInsertion: InsertionMode
   shortcutConflicts: string[]
+  report: DiagnosticReport
 }
 
 export interface DesktopClient {
@@ -40,13 +42,19 @@ export interface DesktopClient {
   clearClipboardHistory(): Promise<void>
   exportSettings(): Promise<boolean>
   importSettings(): Promise<AppInfo['preferences'] | null>
+  getDiagnosticReport(): Promise<DiagnosticReport>
+  copyDiagnosticReport(): Promise<void>
+  deleteAllUserData(): Promise<void>
 }
 
 export class ElectronDesktopClient implements DesktopClient {
   constructor(private readonly api: CureVoicerApi) {}
 
   async getDiagnostics(): Promise<DiagnosticsViewModel> {
-    const info: AppInfo = await this.api.getAppInfo()
+    const [info, report]: [AppInfo, DiagnosticReport] = await Promise.all([
+      this.api.getAppInfo(),
+      this.api.getDiagnosticReport()
+    ])
     return {
       appVersion: info.version,
       platform: info.platform,
@@ -57,7 +65,8 @@ export class ElectronDesktopClient implements DesktopClient {
       currentInsertion: info.preferences.autoPaste
         ? info.preferences.insertionMode
         : 'clipboard-only',
-      shortcutConflicts: info.shortcutConflicts
+      shortcutConflicts: info.shortcutConflicts,
+      report
     }
   }
 
@@ -125,5 +134,17 @@ export class ElectronDesktopClient implements DesktopClient {
 
   importSettings(): Promise<AppInfo['preferences'] | null> {
     return this.api.importSettings()
+  }
+
+  getDiagnosticReport(): Promise<DiagnosticReport> {
+    return this.api.getDiagnosticReport()
+  }
+
+  copyDiagnosticReport(): Promise<void> {
+    return this.api.copyDiagnosticReport()
+  }
+
+  deleteAllUserData(): Promise<void> {
+    return this.api.deleteAllUserData()
   }
 }

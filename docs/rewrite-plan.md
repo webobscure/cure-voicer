@@ -234,17 +234,34 @@ optional global insertion shortcuts.
 
 ## Stage 8 — hardening, diagnostics and release
 
-Status: **not started**
+Status: **in progress**
 
-- [ ] Complete threat model and security documentation.
-- [ ] Store API secrets with `safeStorage`; add explicit cloud consent.
-- [ ] Add diagnostics page/report with redaction and service probes.
-- [ ] Add user-data deletion and model/cache controls.
-- [ ] Add IPC integration, Electron smoke and Playwright E2E suites.
+- [x] Complete threat model and security documentation.
+- [x] Store API secrets with `safeStorage`; add explicit cloud consent.
+- [x] Add diagnostics page/report with redaction and service probes.
+- [x] Add user-data deletion and model/cache controls.
+- [x] Add IPC integration, Electron smoke and Playwright E2E suites.
 - [ ] Test packaged macOS/Windows builds and native runtime loading.
 - [ ] Configure macOS entitlements/signing/notarization and Windows signing.
 - [ ] Add signed auto-update policy with staged rollout and rollback notes.
-- [ ] Finish all extension and platform documentation.
+- [x] Finish all extension and platform documentation.
+
+The first Electron E2E test caught and fixed a production-only preload failure:
+Rollup had extracted IPC constants into a shared chunk that Electron's sandboxed
+preload cannot require. Both preload bundles are now self-contained, and the E2E
+asserts that Node/raw IPC are absent while the typed diagnostics capability is
+present. Production dependency audit currently reports zero vulnerabilities;
+dev-tool advisories remain isolated from packaged dependencies.
+
+The macOS arm64 `.app`, DMG and ZIP were built locally and the packaged app
+passed a separate smoke launch; both arm64 Swift helpers, usage descriptions and
+the generated branded ICNS were inspected in the bundle. Signing was skipped
+because no Developer ID identity is installed. The Windows workflow now runs E2E,
+loads both native runtimes, accepts optional Authenticode secrets, builds x64
+portable/NSIS artifacts and smoke-tests `win-unpacked`; those steps still require
+the next Windows runner execution before this stage can be closed. The signed
+update rollout/rollback policy is documented, while automatic installation stays
+disabled until signed-release verification tests exist.
 
 ## Validation required after every stage
 

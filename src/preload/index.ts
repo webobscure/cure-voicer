@@ -13,7 +13,29 @@ import type {
   InternalEditorPayload,
   EditorCommand
 } from '../shared/contracts'
-import { IPC } from '../shared/contracts'
+
+// A sandboxed preload cannot require a Rollup-generated local shared chunk.
+// Keep this runtime table self-contained; compile-time API types still come from
+// the shared contract and IPC handlers validate every payload in main.
+const IPC = {
+  getAppInfo: 'app:get-info', setRecordingState: 'recording:set-state', beginDictation: 'recording:begin',
+  setAudioLevel: 'recording:set-audio-level', finishRecording: 'recording:finish', cancelDictation: 'recording:cancel',
+  recordingCommand: 'recording:command', overlayState: 'overlay:state', overlayAudioLevel: 'overlay:audio-level',
+  setOverlayPlacement: 'overlay:set-placement', overlayPlacementChanged: 'overlay:placement-changed',
+  beginOverlayDrag: 'overlay:begin-drag', endOverlayDrag: 'overlay:end-drag', showOverlayMenu: 'overlay:show-menu',
+  overlayPreferencesChanged: 'overlay:preferences-changed', updatePreferences: 'settings:update-preferences',
+  requestGlobalInputAccess: 'permissions:request-global-input', openSystemSettings: 'permissions:open-system-settings',
+  completeOnboarding: 'onboarding:complete', setHotkeyCapture: 'settings:set-hotkey-capture',
+  addVocabularyTerm: 'settings:add-vocabulary-term', removeVocabularyTerm: 'settings:remove-vocabulary-term',
+  removeHistoryEntry: 'settings:remove-history-entry', clearHistory: 'settings:clear-history',
+  upsertTemplate: 'templates:upsert', removeTemplate: 'templates:remove', clearClipboardHistory: 'clipboard-history:clear',
+  exportSettings: 'settings:export', importSettings: 'settings:import', getDiagnosticReport: 'diagnostics:get-report',
+  copyDiagnosticReport: 'diagnostics:copy-report', deleteAllUserData: 'settings:delete-all-user-data',
+  copyText: 'settings:copy-text', prepareAsr: 'models:prepare-asr', prepareSmartCorrection: 'models:prepare-smart-correction',
+  smartCorrectionStatusChanged: 'models:smart-correction-status-changed', asrStatusChanged: 'models:asr-status-changed',
+  internalEditorText: 'editor:open-text', editorCommand: 'editor:command', transformText: 'editor:transform-text',
+  insertEditorText: 'editor:insert-text', settingsNavigate: 'settings:navigate'
+} as const
 
 const api: CureVoicerApi = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo),
@@ -45,6 +67,9 @@ const api: CureVoicerApi = {
   clearClipboardHistory: () => ipcRenderer.invoke(IPC.clearClipboardHistory),
   exportSettings: () => ipcRenderer.invoke(IPC.exportSettings),
   importSettings: () => ipcRenderer.invoke(IPC.importSettings),
+  getDiagnosticReport: () => ipcRenderer.invoke(IPC.getDiagnosticReport),
+  copyDiagnosticReport: () => ipcRenderer.invoke(IPC.copyDiagnosticReport),
+  deleteAllUserData: () => ipcRenderer.invoke(IPC.deleteAllUserData),
   copyText: (text: string) => ipcRenderer.invoke(IPC.copyText, text),
   prepareAsr: () => ipcRenderer.invoke(IPC.prepareAsr),
   prepareSmartCorrection: () => ipcRenderer.invoke(IPC.prepareSmartCorrection),

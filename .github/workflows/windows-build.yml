@@ -38,8 +38,24 @@ jobs:
       - name: Verify Windows native runtimes
         run: node -e "require('sherpa-onnx-node'); require('uiohook-napi'); console.log('Windows native runtimes loaded')"
 
+      - name: Run Electron E2E
+        run: npm run test:e2e
+
       - name: Build portable and NSIS packages
         run: npm run pack:win
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+
+      - name: Smoke-test packaged Windows app
+        shell: pwsh
+        run: |
+          $profile = Join-Path $env:RUNNER_TEMP 'cure-voicer-packaged-smoke'
+          New-Item -ItemType Directory -Path $profile -Force | Out-Null
+          $env:CURE_VOICER_SMOKE_TEST = '1'
+          $env:CURE_VOICER_SMOKE_USER_DATA = $profile
+          & 'release/win-unpacked/Cure Voicer.exe'
+          if ($LASTEXITCODE -ne 0) { throw "Packaged smoke test failed: $LASTEXITCODE" }
 
       - name: Generate SHA-256 checksums
         shell: pwsh

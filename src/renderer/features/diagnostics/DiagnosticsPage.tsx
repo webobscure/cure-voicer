@@ -46,12 +46,17 @@ export function DiagnosticsPage({ client }: DiagnosticsPageProps): React.JSX.Ele
   return (
     <div className="react-diagnostics-grid">
       <DiagnosticCard label="Версия" value={diagnostics.appVersion} ok />
+      <DiagnosticCard label="Electron / Node" value={`${diagnostics.report.electronVersion} / ${diagnostics.report.nodeVersion}`} ok />
       <DiagnosticCard label="Платформа" value={diagnostics.platform} ok />
       <DiagnosticCard
         label="Распознавание"
         value={`${diagnostics.recognitionEngine} · ${diagnostics.recognitionState}`}
         ok={diagnostics.recognitionState === 'ready'}
       />
+      <DiagnosticCard label="Микрофон" value={diagnostics.report.permissions.microphone} ok={diagnostics.report.permissions.microphone === 'granted'} />
+      <DiagnosticCard label="Стратегии вставки" value={diagnostics.report.insertion.available.join(', ') || 'Недоступны'} ok={diagnostics.report.insertion.available.length > 0} />
+      <DiagnosticCard label="Активная интеграция" value={diagnostics.report.activeIntegrationId} ok />
+      <DiagnosticCard label="Защищённое хранилище" value={diagnostics.report.protectedStorageAvailable ? 'Доступно' : 'Недоступно'} ok={diagnostics.report.protectedStorageAvailable} />
       <DiagnosticCard
         label="Глобальный ввод"
         value={diagnostics.globalInputAvailable ? 'Доступен' : 'Нужно разрешение'}
@@ -82,6 +87,14 @@ export function DiagnosticsPage({ client }: DiagnosticsPageProps): React.JSX.Ele
       <p className="react-diagnostics-note">
         Диагностика не включает распознанный текст, содержимое буфера обмена или аудио.
       </p>
+      <div className="diagnostic-actions">
+        <button type="button" onClick={() => void client.copyDiagnosticReport()}>Копировать обезличенный отчёт</button>
+        <button type="button" className="danger" onClick={() => {
+          if (window.confirm('Удалить настройки, историю, записи, модели и защищённые ключи? Приложение перезапустится.')) {
+            void client.deleteAllUserData()
+          }
+        }}>Удалить все данные</button>
+      </div>
     </div>
   )
 }

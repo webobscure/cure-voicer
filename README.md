@@ -51,6 +51,7 @@ npm run lint
 npm test
 npm run build
 npm run test:smoke
+npm run test:e2e
 ```
 
 Run all non-GUI checks:
@@ -120,6 +121,10 @@ runtime-validated IPC and provider-based insertion. See:
 - [clipboard safety](docs/clipboard-safety.md);
 - [macOS platform notes](docs/platform-macos.md);
 - [Windows platform notes](docs/platform-windows.md).
+- [adding an integration](docs/adding-integration.md);
+- [adding a voice command](docs/adding-voice-command.md);
+- [adding a transcription provider](docs/adding-transcription-provider.md).
+- [signed update policy](docs/update-policy.md).
 
 ASR adapters:
 

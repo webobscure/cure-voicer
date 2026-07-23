@@ -144,6 +144,7 @@ let preferences: AppPreferences = {
   integrationRules: [],
   historyEnabled: false,
   clipboardHistoryEnabled: false,
+  cloudProcessingEnabled: false,
   clipboardRetentionDays: 7,
   theme: 'system',
   locale: 'system',

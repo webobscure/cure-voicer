@@ -33,6 +33,14 @@ export class TextInsertionService {
     return runWithInsertionActivity(() => this.insertExclusive(text, context))
   }
 
+  async availableModes(context: InsertionContext): Promise<InsertionMode[]> {
+    const available: InsertionMode[] = []
+    for (const [mode, provider] of this.byMode) {
+      if (await provider.isSupported(context).catch(() => false)) available.push(mode)
+    }
+    return available
+  }
+
   private async insertExclusive(
     text: string,
     context: InsertionContext

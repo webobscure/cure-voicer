@@ -29,6 +29,9 @@ export const IPC = {
   clearClipboardHistory: 'clipboard-history:clear',
   exportSettings: 'settings:export',
   importSettings: 'settings:import',
+  getDiagnosticReport: 'diagnostics:get-report',
+  copyDiagnosticReport: 'diagnostics:copy-report',
+  deleteAllUserData: 'settings:delete-all-user-data',
   copyText: 'settings:copy-text',
   prepareAsr: 'models:prepare-asr',
   prepareSmartCorrection: 'models:prepare-smart-correction',
@@ -125,6 +128,7 @@ export interface AppPreferences {
   integrationRules: import('./types/integrations').AppIntegrationRule[]
   historyEnabled: boolean
   clipboardHistoryEnabled: boolean
+  cloudProcessingEnabled: boolean
   clipboardRetentionDays: number
   theme: 'system' | 'light' | 'dark'
   locale: 'system' | 'ru' | 'en'
@@ -151,6 +155,41 @@ export interface ClipboardHistoryItem {
   text: string
   createdAt: string
   applicationId?: string
+}
+
+export interface DiagnosticReport {
+  generatedAt: string
+  appVersion: string
+  electronVersion: string
+  nodeVersion: string
+  platform: NodeJS.Platform
+  architecture: string
+  osRelease: string
+  permissions: {
+    microphone: string
+    globalInput: boolean
+  }
+  shortcuts: {
+    configured: number
+    conflicts: string[]
+  }
+  insertion: {
+    configured: import('./types/insertion').InsertionMode
+    available: import('./types/insertion').InsertionMode[]
+  }
+  recognition: {
+    provider: string
+    state: string
+  }
+  activeIntegrationId: string
+  protectedStorageAvailable: boolean
+  storage: {
+    historyEnabled: boolean
+    historyEntries: number
+    clipboardHistoryEnabled: boolean
+    clipboardEntries: number
+    templates: number
+  }
 }
 
 export interface DictationHistoryItem {
@@ -245,6 +284,9 @@ export interface CureVoicerApi {
   clearClipboardHistory(): Promise<void>
   exportSettings(): Promise<boolean>
   importSettings(): Promise<AppPreferences | null>
+  getDiagnosticReport(): Promise<DiagnosticReport>
+  copyDiagnosticReport(): Promise<void>
+  deleteAllUserData(): Promise<void>
   copyText(text: string): Promise<void>
   prepareAsr(): Promise<AsrStatus>
   prepareSmartCorrection(): Promise<SmartCorrectionStatus>

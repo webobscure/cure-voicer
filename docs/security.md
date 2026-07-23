@@ -10,6 +10,22 @@
   require message validation before the migration is complete.
 - External transcription/transformation is disabled by default.
 
+## Threat model
+
+Protected assets are dictated/selected text, clipboard formats, recordings,
+credentials, application identity, settings and the ability to generate global
+input. Relevant adversaries include compromised renderer content, malicious or
+buggy clipboard software, an untrusted destination field, a tampered update, and
+another local process reading weakly protected files.
+
+Primary mitigations are renderer sandboxing and capability APIs; sender/payload
+validation; secure-field and focus revalidation; serialized clipboard ownership;
+encrypted secret files with restrictive permissions; no implicit cloud access;
+and signed release/update requirements. A same-user process with full filesystem
+or Accessibility access remains outside the protection boundary. Windows cannot
+insert into a higher-integrity process, and macOS permissions can be revoked at
+any time; both conditions must fail safely rather than trigger elevation.
+
 ## Electron baseline
 
 All windows use:
@@ -54,7 +70,7 @@ and fallback fact—not payload content.
 - Settings export excludes transcript history, clipboard history, audio, model
   data and future protected credential values.
 - Cloud processing is off by default and requires per-provider consent.
-- API keys will be encrypted using Electron `safeStorage`; unavailable protected
+- API keys are encrypted using Electron `safeStorage`; unavailable protected
   storage is an explicit diagnostic/error, not a silent plaintext fallback.
 - User data deletion must cover database, recordings, models on request, logs and
   secret-store entries.
@@ -82,9 +98,11 @@ and fallback fact—not payload content.
 
 ## Release security backlog
 
-- Validate utility-process and Swift helper messages with versioned schemas.
 - Add macOS entitlements, hardened runtime, signing and notarization.
 - Add Windows Authenticode signing and integrity-level diagnostics.
 - Configure signed auto-updates with rollback policy.
 - Add dependency scanning and produce an SBOM for releases.
-- Threat-model active-application and selected-text adapters before enabling.
+
+Automatic installation of updates remains disabled until both platform artifacts
+are signed and the release feed can be cryptographically trusted. The app must
+never downgrade to an unsigned package or execute a renderer-provided update URL.

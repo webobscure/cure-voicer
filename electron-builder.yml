@@ -50,6 +50,13 @@ portable:
 
 mac:
   category: public.app-category.productivity
+  icon: assets/branding/cure-voicer.icns
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: Cure Voicer uses the microphone only while you dictate.
+    NSAppleEventsUsageDescription: Cure Voicer uses System Events to paste text when direct input is unavailable.
   target:
     - target: dmg
       arch:

@@ -4,7 +4,16 @@ import type {
   CureVoicerOverlayApi,
   RecordingState
 } from '../shared/contracts'
-import { IPC } from '../shared/contracts'
+
+const IPC = {
+  getOverlayInfo: 'overlay:get-info',
+  beginOverlayDrag: 'overlay:begin-drag',
+  endOverlayDrag: 'overlay:end-drag',
+  showOverlayMenu: 'overlay:show-menu',
+  overlayState: 'overlay:state',
+  overlayAudioLevel: 'overlay:audio-level',
+  overlayPreferencesChanged: 'overlay:preferences-changed'
+} as const
 
 const api: CureVoicerOverlayApi = {
   getOverlayInfo: () => ipcRenderer.invoke(IPC.getOverlayInfo),
@@ -34,4 +43,3 @@ const api: CureVoicerOverlayApi = {
 }
 
 contextBridge.exposeInMainWorld('cureVoicerOverlay', api)
-
