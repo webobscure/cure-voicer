@@ -1,25 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorDocument, type EditorDocumentSnapshot } from '../../../modules/editor/editor-document'
 import type { DesktopClient } from '../../app/services/desktop-client'
+import { useI18n } from '../../app/i18n/i18n-context'
 
 const presets = [
-  ['none', 'Без обработки'],
-  ['punctuation', 'Пунктуация'],
-  ['spelling', 'Орфография'],
-  ['remove-fillers', 'Без слов-паразитов'],
-  ['remove-repetitions', 'Без повторов'],
-  ['written-style', 'Письменный текст'],
-  ['shorten', 'Сократить'],
-  ['expand', 'Расширить'],
-  ['friendly', 'Дружелюбно'],
-  ['business', 'Деловой стиль'],
-  ['formal', 'Формально'],
-  ['structured-list', 'Список'],
-  ['email', 'Email'],
-  ['message', 'Сообщение'],
-  ['technical-specification', 'Техническое задание'],
-  ['translate', 'Перевод'],
-  ['custom', 'Своя инструкция']
+  ['none', 'Без обработки', 'No processing'], ['punctuation', 'Пунктуация', 'Punctuation'],
+  ['spelling', 'Орфография', 'Spelling'], ['remove-fillers', 'Без слов-паразитов', 'Remove filler words'],
+  ['remove-repetitions', 'Без повторов', 'Remove repetitions'], ['written-style', 'Письменный текст', 'Written style'],
+  ['shorten', 'Сократить', 'Shorten'], ['expand', 'Расширить', 'Expand'],
+  ['friendly', 'Дружелюбно', 'Friendly'], ['business', 'Деловой стиль', 'Business'],
+  ['formal', 'Формально', 'Formal'], ['structured-list', 'Список', 'Structured list'],
+  ['email', 'Email', 'Email'], ['message', 'Сообщение', 'Message'],
+  ['technical-specification', 'Техническое задание', 'Technical specification'],
+  ['translate', 'Перевод', 'Translate'], ['custom', 'Своя инструкция', 'Custom instruction']
 ] as const
 
 const emptySnapshot: EditorDocumentSnapshot = {
@@ -32,6 +25,8 @@ const emptySnapshot: EditorDocumentSnapshot = {
 }
 
 export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Element {
+  const { locale } = useI18n()
+  const tr = (ru: string, en: string): string => locale === 'ru' ? ru : en
   const documentRef = useRef(new EditorDocument())
   const [document, setDocument] = useState(emptySnapshot)
   const [draft, setDraft] = useState('')
@@ -40,7 +35,7 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
   const [targetLanguage, setTargetLanguage] = useState('English')
   const [search, setSearch] = useState('')
   const [replacement, setReplacement] = useState('')
-  const [status, setStatus] = useState('Ожидает результат диктовки')
+  const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(
@@ -53,10 +48,10 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
         setDocument(snapshot)
         setDraft(snapshot.currentText)
         setStatus(
-          `Текст готов · ${payload.applicationName ?? 'приложение не определено'} · ${payload.insertionMode}`
+          `${tr('Текст готов', 'Text ready')} · ${payload.applicationName ?? tr('приложение не определено', 'unknown application')} · ${payload.insertionMode}`
         )
       }),
-    [client]
+    [client, locale]
   )
 
   useEffect(() => {
@@ -68,10 +63,10 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
       client.onEditorCommand((command) => {
         if (command === 'undo') {
           applySnapshot(documentRef.current.undo())
-          setStatus('Последнее изменение отменено голосовой командой')
+          setStatus(tr('Последнее изменение отменено голосовой командой', 'Last change was undone by voice command'))
         }
       }),
-    [client]
+    [client, locale]
   )
 
   const applySnapshot = (snapshot: EditorDocumentSnapshot): void => {
@@ -89,7 +84,7 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
     const source = commitDraft().currentText
     if (!source.trim()) return
     setBusy(true)
-    setStatus('Обрабатываю локально…')
+    setStatus(tr('Обрабатываю локально…', 'Processing locally…'))
     try {
       const result = await client.transformText({
         text: source,
@@ -98,9 +93,9 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
         ...(presetId === 'custom' ? { customInstruction } : {})
       })
       applySnapshot(documentRef.current.update(result.transformedText, 'transformed'))
-      setStatus(result.changed ? `Готово · ${result.durationMs} мс` : 'Текст не изменился')
+      setStatus(result.changed ? `${tr('Готово', 'Done')} · ${result.durationMs} ms` : tr('Текст не изменился', 'Text was not changed'))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Не удалось обработать текст')
+      setStatus(error instanceof Error ? error.message : tr('Не удалось обработать текст', 'Could not process text'))
     } finally {
       setBusy(false)
     }
@@ -110,7 +105,7 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
     const text = commitDraft().currentText
     if (!text) return
     await client.copyText(text)
-    setStatus('Скопировано')
+    setStatus(tr('Скопировано', 'Copied'))
   }
 
   const insert = async (): Promise<void> => {
@@ -119,9 +114,9 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
     setBusy(true)
     try {
       const result = await client.insertEditorText(text)
-      setStatus(result.outcome === 'inserted' ? 'Вставлено' : `Результат: ${result.outcome}`)
+      setStatus(result.outcome === 'inserted' ? tr('Вставлено', 'Inserted') : `${tr('Результат', 'Result')}: ${result.outcome}`)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Не удалось вставить текст')
+      setStatus(error instanceof Error ? error.message : tr('Не удалось вставить текст', 'Could not insert text'))
     } finally {
       setBusy(false)
     }
@@ -134,29 +129,29 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
           setPresetId(event.target.value)
           void client.setDefaultTransformationPreset(event.target.value)
         }}>
-          {presets.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {presets.map(([id, ru, en]) => <option key={id} value={id}>{tr(ru, en)}</option>)}
         </select>
         {presetId === 'translate' && (
-          <input value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} placeholder="Язык" />
+          <input value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} placeholder={tr('Язык', 'Language')} />
         )}
         {presetId === 'custom' && (
-          <input value={customInstruction} onChange={(event) => setCustomInstruction(event.target.value)} placeholder="Инструкция" />
+          <input value={customInstruction} onChange={(event) => setCustomInstruction(event.target.value)} placeholder={tr('Инструкция', 'Instruction')} />
         )}
-        <button type="button" disabled={busy || !draft.trim()} onClick={() => void transform()}>Обработать</button>
-        <button type="button" disabled={!document.canUndo} onClick={() => applySnapshot(documentRef.current.undo())}>Отменить</button>
-        <button type="button" disabled={!document.canRedo} onClick={() => applySnapshot(documentRef.current.redo())}>Повторить</button>
-        <button type="button" disabled={!draft.trim()} onClick={() => void copy()}>Копировать</button>
-        <button type="button" disabled={busy || !draft.trim()} onClick={() => void insert()}>Вставить</button>
+        <button type="button" disabled={busy || !draft.trim()} onClick={() => void transform()}>{tr('Обработать', 'Process')}</button>
+        <button type="button" disabled={!document.canUndo} onClick={() => applySnapshot(documentRef.current.undo())}>{tr('Отменить', 'Undo')}</button>
+        <button type="button" disabled={!document.canRedo} onClick={() => applySnapshot(documentRef.current.redo())}>{tr('Повторить', 'Redo')}</button>
+        <button type="button" disabled={!draft.trim()} onClick={() => void copy()}>{tr('Копировать', 'Copy')}</button>
+        <button type="button" disabled={busy || !draft.trim()} onClick={() => void insert()}>{tr('Вставить', 'Insert')}</button>
       </div>
       <div className="editor-compare">
-        <label><span>Исходный текст</span><textarea readOnly value={document.originalText} /></label>
-        <label><span>Результат</span><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} /></label>
+        <label><span>{tr('Исходный текст', 'Original text')}</span><textarea readOnly value={document.originalText} /></label>
+        <label><span>{tr('Результат', 'Result')}</span><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} /></label>
       </div>
       <div className="editor-find">
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти" />
-        <input value={replacement} onChange={(event) => setReplacement(event.target.value)} placeholder="Заменить на" />
-        <button type="button" disabled={!search} onClick={() => applySnapshot(documentRef.current.replaceAll(search, replacement))}>Заменить всё</button>
-        <span>{status} · версий: {document.revisions.length}</span>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tr('Найти', 'Find')} />
+        <input value={replacement} onChange={(event) => setReplacement(event.target.value)} placeholder={tr('Заменить на', 'Replace with')} />
+        <button type="button" disabled={!search} onClick={() => applySnapshot(documentRef.current.replaceAll(search, replacement))}>{tr('Заменить всё', 'Replace all')}</button>
+        <span>{status || tr('Ожидает результат диктовки', 'Waiting for a dictation result')} · {tr('версий', 'revisions')}: {document.revisions.length}</span>
       </div>
     </div>
   )

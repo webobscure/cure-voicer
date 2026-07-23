@@ -216,7 +216,7 @@ separate non-overridable insertion safety check.
 
 ## Stage 7 — product data and settings
 
-Status: **in progress**
+Status: **complete**
 
 - [x] Add SQLite repositories and idempotent migrations from `settings.json`.
 - [x] Add independent, opt-in history retention and deletion controls.
@@ -224,7 +224,7 @@ Status: **in progress**
 - [x] Add sensitive-data heuristics, application exclusions and retention TTL.
 - [x] Add import/export with schema validation and secret exclusion.
 - [x] Complete system/light/dark theme handling, including live OS changes.
-- [ ] Complete Russian/English localization across every renderer surface.
+- [x] Complete Russian/English localization across every renderer surface.
 - [x] Migrate onboarding to a feature-based React page and controller.
 - [x] Migrate the remaining legacy settings panels to feature-based React pages.
 
@@ -237,21 +237,22 @@ optional global insertion shortcuts.
 
 The onboarding flow is now a React feature backed by a framework-independent
 controller. It no longer mutates a parallel tree of imperative DOM elements.
-The shared typed localization store currently covers the complete onboarding
-flow, vocabulary and history, and is the migration path for the remaining
-settings surfaces. Vocabulary and history now use React pages backed by a shared
+The shared typed localization store covers onboarding, shell navigation and
+shared product copy. Every feature page resolves Russian/English presentation
+from the same typed locale source. Vocabulary and history use React pages backed by a shared
 external data store, so dictation results can update them without DOM mutation.
 The models page is also React-owned; ASR/Qwen status remains authoritative in
 main and reaches the page through a presentation-only external store. Explicit
 light/dark preferences override the OS correctly, while the system preference
 tracks live color-scheme changes.
 
-The General and Dictation panels are now React-owned as well. Recording,
+The General and Dictation panels are React-owned as well. Recording,
 silence detection, microphone enumeration and native hold-key capture remain in
 the renderer service and publish presentation state through a typed external
-controller; React components do not call IPC directly. The former markup is
-kept hidden for one migration checkpoint and will be removed together with the
-static settings shell after the bilingual shell is verified.
+controller; React components do not call IPC directly. Sidebar navigation,
+page headings and all feature surfaces now live in one bilingual React shell.
+The static settings markup has been removed, and the floating overlay follows
+the same locale preference without adding Node access to its renderer.
 
 ## Stage 8 — hardening, diagnostics and release
 

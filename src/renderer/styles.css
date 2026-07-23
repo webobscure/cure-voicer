@@ -45,6 +45,8 @@ input:focus-visible { outline: 2px solid rgba(0, 122, 255, 0.48); outline-offset
 
 [hidden] { display: none !important; }
 
+#appReactRoot { width: 100%; height: 100%; }
+
 .settings-window {
   display: grid;
   width: 100%;
@@ -102,6 +104,8 @@ body[data-platform='win32'] .sidebar-drag-region { height: 18px; flex-basis: 18p
   stroke-width: 1.8;
 }
 
+.app-icon img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+
 .sidebar-brand strong,
 .sidebar-brand span { display: block; }
 .sidebar-brand strong { font-size: 13px; font-weight: 650; letter-spacing: -0.015em; }
@@ -146,6 +150,8 @@ body[data-platform='win32'] .sidebar-drag-region { height: 18px; flex-basis: 18p
   stroke-linejoin: round;
   stroke-width: 1.55;
 }
+
+.nav-symbol { display: grid; width: 19px; flex: 0 0 19px; place-items: center; font-size: 16px; }
 
 .sidebar-footer {
   display: flex;

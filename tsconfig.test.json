@@ -19,6 +19,7 @@
     "src/renderer/app/settings-data-store.ts",
     "src/renderer/app/model-settings-store.ts",
     "src/renderer/app/core-settings-controller.ts",
+    "src/renderer/app/settings-shell-controller.ts",
     "src/renderer/app/i18n/**/*.ts",
     "src/renderer/features/onboarding/onboarding-controller.ts",
     "src/shared/contracts.ts",

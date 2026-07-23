@@ -5,6 +5,7 @@ import type {
   RecordingState
 } from '../shared/contracts'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
+import { resolveLocale, type ResolvedLocale } from './app/i18n/i18n-store'
 
 const caption = document.getElementById('overlayCaption')
 const api = window.cureVoicerOverlay as CureVoicerOverlayApi | undefined
@@ -22,21 +23,19 @@ let currentState: RecordingState = 'idle'
 let previousFrame = performance.now()
 let isDragging = false
 let overlayMotion: OverlayMotion = 'balanced'
+let locale: ResolvedLocale = resolveLocale('system', navigator.language)
 
 if (brandLogo) brandLogo.src = brandLogoUrl
 
-const stateLabels: Record<RecordingState, string> = {
-  idle: 'Готово',
-  starting: 'Подключаюсь…',
-  recording: 'Слушаю',
-  transcribing: 'Распознаю…',
-  error: 'Ошибка'
+const stateLabels: Record<ResolvedLocale, Record<RecordingState, string>> = {
+  ru: { idle: 'Готово', starting: 'Подключаюсь…', recording: 'Слушаю', transcribing: 'Распознаю…', error: 'Ошибка' },
+  en: { idle: 'Ready', starting: 'Connecting…', recording: 'Listening', transcribing: 'Recognizing…', error: 'Error' }
 }
 
 function setState(state: RecordingState): void {
   currentState = state
   document.body.dataset.state = state
-  if (caption) caption.textContent = stateLabels[state]
+  if (caption) caption.textContent = stateLabels[locale][state]
   if (state !== 'recording') targetLevel = state === 'transcribing' ? 0.24 : 0
 }
 
@@ -108,7 +107,10 @@ if (api) {
   api.onOverlayState(setState)
   const applyPreferences = (preferences: AppPreferences): void => {
     overlayMotion = preferences.overlayMotion
+    locale = resolveLocale(preferences.locale, navigator.language)
     document.body.dataset.motion = overlayMotion
+    document.documentElement.lang = locale
+    if (caption) caption.textContent = stateLabels[locale][currentState]
   }
   api.onOverlayPreferencesChanged(applyPreferences)
   api.getOverlayInfo().then((info) => applyPreferences(info.preferences)).catch(console.error)

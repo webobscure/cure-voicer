@@ -16,6 +16,7 @@ import { onboardingController } from './features/onboarding/onboarding-controlle
 import { settingsDataStore } from './app/settings-data-store'
 import { modelSettingsStore } from './app/model-settings-store'
 import { coreSettingsController } from './app/core-settings-controller'
+import { settingsShellController } from './app/settings-shell-controller'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
 const i18n = new I18nStore('system', navigator.language)
@@ -29,11 +30,6 @@ mountReactFeatures(api, i18n, applyAppearance)
 
 const resultText = getElement('resultText')
 const resultPath = getElement('resultPath')
-const versionLabel = getElement('versionLabel')
-const pageTitle = getElement('pageTitle')
-const pageSubtitle = getElement('pageSubtitle')
-const navItems = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-nav]'))
-const panes = Array.from(document.querySelectorAll<HTMLElement>('[data-pane]'))
 
 let state: RecordingState = 'idle'
 let recordingStartedAt = 0
@@ -302,35 +298,8 @@ function updateLevel(level: number): void {
   }
 }
 
-const paneCopy: Record<string, [string, string]> = {
-  general: ['Основные', 'Поведение приложения и быстрый запуск'],
-  dictation: ['Диктовка', 'Запись, завершение речи и плавающий индикатор'],
-  models: ['Модели', 'Локальные движки распознавания речи'],
-  vocabulary: ['Словарь', 'Имена и термины для более точной диктовки'],
-  history: ['История', 'Недавние локальные диктовки'],
-  editor: ['Редактор', 'Сравнение, ручная правка и локальная обработка'],
-  commands: ['Голосовые команды', 'Фразы активации, включение и защита команд'],
-  hotkeys: ['Горячие клавиши', 'Глобальные действия и проверка конфликтов'],
-  integrations: ['Интеграции', 'Правила вставки и обработки для приложений'],
-  templates: ['Шаблоны', 'Закреплённые фрагменты и быстрая вставка'],
-  clipboard: ['Буфер и данные', 'Локальная история, приватность и перенос настроек'],
-  diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
-}
-
 function selectPane(paneId: string): void {
-  navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.nav === paneId))
-  panes.forEach((pane) => {
-    const isActive = pane.dataset.pane === paneId
-    pane.classList.toggle('is-active', isActive)
-    pane.hidden = !isActive
-  })
-
-  const [title, subtitle] = paneCopy[paneId] ?? [
-    'Основные',
-    'Поведение приложения и быстрый запуск'
-  ]
-  pageTitle.textContent = title
-  pageSubtitle.textContent = subtitle
+  settingsShellController.select(paneId)
 }
 
 api?.onInternalEditorText(() => selectPane('editor'))
@@ -359,6 +328,7 @@ function renderPreferences(): void {
 function applyAppearance(value: AppPreferences): void {
   appearance.update(value)
   i18n.setPreference(value.locale)
+  document.documentElement.lang = i18n.getSnapshot()
 }
 
 function renderAsrStatus(): void {
@@ -718,9 +688,6 @@ window.addEventListener(
   true
 )
 window.addEventListener('blur', () => void cancelHoldKeyCapture())
-navItems.forEach((item) => {
-  item.addEventListener('click', () => selectPane(item.dataset.nav ?? 'general'))
-})
 if (api) {
   api.onRecordingCommand((command) => void handleRecordingCommand(command))
   api.onOverlayPlacementChanged(renderOverlayPlacement)
@@ -740,7 +707,7 @@ if (api) {
       platform: info.platform,
       globalInputAvailable: info.globalInputAvailable
     })
-    versionLabel.textContent = `Cure Voicer ${info.version}`
+    settingsShellController.setVersion(info.version)
     preferences = info.preferences
     smartCorrectionStatus = info.smartCorrection
     asrStatus = info.asrStatus
