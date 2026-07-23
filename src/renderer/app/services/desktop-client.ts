@@ -40,6 +40,8 @@ export interface DesktopClient {
   getHistory(): Promise<AppInfo['history']>
   removeHistoryEntry(id: string): Promise<AppInfo['history']>
   clearHistory(): Promise<void>
+  prepareAsr(): Promise<AppInfo['asrStatus']>
+  prepareSmartCorrection(): Promise<AppInfo['smartCorrection']>
   updatePreferences(patch: Partial<AppInfo['preferences']>): Promise<AppInfo['preferences']>
   getTemplates(): Promise<TextTemplate[]>
   getClipboardHistory(): Promise<ClipboardHistoryItem[]>
@@ -133,6 +135,14 @@ export class ElectronDesktopClient implements DesktopClient {
 
   clearHistory(): Promise<void> {
     return this.api.clearHistory()
+  }
+
+  prepareAsr(): Promise<AppInfo['asrStatus']> {
+    return this.api.prepareAsr()
+  }
+
+  prepareSmartCorrection(): Promise<AppInfo['smartCorrection']> {
+    return this.api.prepareSmartCorrection()
   }
 
   updatePreferences(

@@ -241,7 +241,8 @@ The shared typed localization store currently covers the complete onboarding
 flow, vocabulary and history, and is the migration path for the remaining
 settings surfaces. Vocabulary and history now use React pages backed by a shared
 external data store, so dictation results can update them without DOM mutation.
-Explicit
+The models page is also React-owned; ASR/Qwen status remains authoritative in
+main and reaches the page through a presentation-only external store. Explicit
 light/dark preferences override the OS correctly, while the system preference
 tracks live color-scheme changes.
 

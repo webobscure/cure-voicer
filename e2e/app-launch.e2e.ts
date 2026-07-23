@@ -54,6 +54,9 @@ test('launches hardened settings UI and exposes only the typed preload surface',
     await preferenceSelects.nth(2).selectOption('en')
     await page.getByRole('button', { name: 'История' }).click()
     await expect(page.getByText('History is empty')).toBeVisible()
+    await page.getByRole('button', { name: 'Модели' }).click()
+    await expect(page.getByText('Active model')).toBeVisible()
+    await expect(page.getByText('Text correction')).toBeVisible()
   } finally {
     await application.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
     await application.close().catch(() => undefined)

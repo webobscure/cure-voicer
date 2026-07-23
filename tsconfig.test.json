@@ -17,6 +17,7 @@
     "src/renderer/audio-recorder.ts",
     "src/renderer/app/appearance.ts",
     "src/renderer/app/settings-data-store.ts",
+    "src/renderer/app/model-settings-store.ts",
     "src/renderer/app/i18n/**/*.ts",
     "src/renderer/features/onboarding/onboarding-controller.ts",
     "src/shared/contracts.ts",

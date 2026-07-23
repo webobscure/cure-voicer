@@ -17,6 +17,7 @@ import { AppearanceController } from './app/appearance'
 import { I18nStore } from './app/i18n/i18n-store'
 import { onboardingController } from './features/onboarding/onboarding-controller'
 import { settingsDataStore } from './app/settings-data-store'
+import { modelSettingsStore } from './app/model-settings-store'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
 const i18n = new I18nStore('system', navigator.language)
@@ -61,16 +62,6 @@ const launchAtLoginToggle = getElement<HTMLInputElement>('launchAtLoginToggle')
 const showOverlayToggle = getElement<HTMLInputElement>('showOverlayToggle')
 const keepRecordingsToggle = getElement<HTMLInputElement>('keepRecordingsToggle')
 const motionSelect = getElement<HTMLSelectElement>('motionSelect')
-const modelEngineValue = getElement('modelEngineValue')
-const modelRuntimeValue = getElement('modelRuntimeValue')
-const modelStatusBadge = getElement('modelStatusBadge')
-const asrModelDetail = getElement('asrModelDetail')
-const asrModelProgress = getElement<HTMLProgressElement>('asrModelProgress')
-const asrRetryButton = getElement<HTMLButtonElement>('asrRetryButton')
-const smartCorrectionToggle = getElement<HTMLInputElement>('smartCorrectionToggle')
-const smartCorrectionDetail = getElement('smartCorrectionDetail')
-const smartCorrectionStatusValue = getElement('smartCorrectionStatusValue')
-const smartCorrectionProgress = getElement<HTMLProgressElement>('smartCorrectionProgress')
 const restartOnboardingButton = getElement<HTMLButtonElement>('restartOnboardingButton')
 
 if (miniBrandLogo) miniBrandLogo.src = brandLogoUrl
@@ -432,7 +423,7 @@ function renderPreferences(): void {
   showOverlayToggle.checked = preferences.showOverlayWhenIdle
   keepRecordingsToggle.checked = preferences.keepRecordings
   motionSelect.value = preferences.overlayMotion
-  smartCorrectionToggle.checked = preferences.smartCorrectionEnabled
+  modelSettingsStore.update({ smartCorrectionEnabled: preferences.smartCorrectionEnabled })
   renderAsrStatus()
   renderSmartCorrectionStatus()
   renderStateCopy()
@@ -444,39 +435,7 @@ function applyAppearance(value: AppPreferences): void {
 }
 
 function renderAsrStatus(): void {
-  const percent = Math.round(asrStatus.progress * 100)
-  const busy = asrStatus.state === 'downloading' || asrStatus.state === 'loading'
-  asrModelProgress.hidden = !busy
-  asrModelProgress.value = asrStatus.progress
-  asrRetryButton.hidden = asrStatus.state !== 'error'
-  asrRetryButton.disabled = busy
-  modelEngineValue.textContent = asrStatus.engine
-
-  switch (asrStatus.state) {
-    case 'downloading':
-      modelStatusBadge.textContent = `${percent}%`
-      asrModelDetail.textContent = `Загрузка Windows-модели · ${percent}% из 670 МБ`
-      break
-    case 'loading':
-      modelStatusBadge.textContent = 'Подготовка'
-      asrModelDetail.textContent = 'Загрузка модели в память…'
-      break
-    case 'ready':
-      modelStatusBadge.textContent = 'Активна'
-      asrModelDetail.textContent = 'Локально · 25 языков · готова к диктовке'
-      break
-    case 'downloaded':
-      modelStatusBadge.textContent = 'Загружена'
-      asrModelDetail.textContent = 'Модель проверена и готова к запуску'
-      break
-    case 'error':
-      modelStatusBadge.textContent = 'Ошибка'
-      asrModelDetail.textContent = asrStatus.error ?? 'Не удалось подготовить модель'
-      break
-    default:
-      modelStatusBadge.textContent = 'Не загружена'
-      asrModelDetail.textContent = 'При первом запуске загрузится локальная модель · 670 МБ'
-  }
+  modelSettingsStore.update({ asr: asrStatus })
   renderOnboardingModelStatus()
 }
 
@@ -591,44 +550,10 @@ async function finishOnboarding(): Promise<void> {
 }
 
 function renderSmartCorrectionStatus(): void {
-  const percent = Math.round(smartCorrectionStatus.progress * 100)
-  const busy =
-    smartCorrectionStatus.state === 'downloading' ||
-    smartCorrectionStatus.state === 'loading'
-  smartCorrectionToggle.disabled = busy
-  smartCorrectionProgress.hidden = !busy
-  smartCorrectionProgress.value = smartCorrectionStatus.progress
-
-  switch (smartCorrectionStatus.state) {
-    case 'downloading':
-      smartCorrectionDetail.textContent = `Загрузка локальной модели · ${percent}%`
-      smartCorrectionStatusValue.textContent = `${percent}%`
-      break
-    case 'loading':
-      smartCorrectionDetail.textContent = 'Запускаем модель на этом компьютере…'
-      smartCorrectionStatusValue.textContent = 'Подготовка'
-      break
-    case 'ready':
-      smartCorrectionDetail.textContent = preferences.smartCorrectionEnabled
-        ? 'Исправляет технические термины и смешанную речь локально'
-        : 'Модель загружена и готова к включению'
-      smartCorrectionStatusValue.textContent = preferences.smartCorrectionEnabled
-        ? 'Активна'
-        : 'Готова'
-      break
-    case 'downloaded':
-      smartCorrectionDetail.textContent = 'Модель загружена и готова к запуску'
-      smartCorrectionStatusValue.textContent = 'Загружена'
-      break
-    case 'error':
-      smartCorrectionDetail.textContent =
-        smartCorrectionStatus.error ?? 'Не удалось запустить локальную модель'
-      smartCorrectionStatusValue.textContent = 'Ошибка'
-      break
-    default:
-      smartCorrectionDetail.textContent = 'При включении загрузится локальная модель · около 834 МБ'
-      smartCorrectionStatusValue.textContent = 'Не загружена'
-  }
+  modelSettingsStore.update({
+    smartCorrection: smartCorrectionStatus,
+    smartCorrectionEnabled: preferences.smartCorrectionEnabled
+  })
 }
 
 async function updatePreferences(patch: Partial<AppPreferences>): Promise<boolean> {
@@ -900,52 +825,6 @@ keepRecordingsToggle.addEventListener('change', () =>
 motionSelect.addEventListener('change', () =>
   void updatePreferences({ overlayMotion: motionSelect.value as OverlayMotion })
 )
-smartCorrectionToggle.addEventListener('change', async () => {
-  const shouldEnable = smartCorrectionToggle.checked
-  if (!shouldEnable) {
-    await updatePreferences({ smartCorrectionEnabled: false })
-    return
-  }
-
-  if (!api) {
-    await updatePreferences({ smartCorrectionEnabled: true })
-    return
-  }
-
-  smartCorrectionToggle.disabled = true
-  try {
-    smartCorrectionStatus = await api.prepareSmartCorrection()
-    if (smartCorrectionStatus.state !== 'ready') {
-      throw new Error('Локальная модель не готова')
-    }
-    await updatePreferences({ smartCorrectionEnabled: true })
-  } catch (error) {
-    preferences.smartCorrectionEnabled = false
-    smartCorrectionStatus = {
-      ...smartCorrectionStatus,
-      state: 'error',
-      error: error instanceof Error ? error.message : String(error)
-    }
-    renderPreferences()
-  } finally {
-    renderSmartCorrectionStatus()
-  }
-})
-asrRetryButton.addEventListener('click', async () => {
-  if (!api) return
-  asrRetryButton.disabled = true
-  try {
-    asrStatus = await api.prepareAsr()
-  } catch (error) {
-    asrStatus = {
-      ...asrStatus,
-      state: 'error',
-      error: error instanceof Error ? error.message : String(error)
-    }
-  } finally {
-    renderAsrStatus()
-  }
-})
 navItems.forEach((item) => {
   item.addEventListener('click', () => selectPane(item.dataset.nav ?? 'general'))
 })
@@ -984,12 +863,16 @@ if (api) {
     })
     engineLabel.textContent =
       info.asrEngine === 'not-configured' ? 'ASR не подключён' : info.asrEngine
-    modelRuntimeValue.textContent =
-      info.platform === 'darwin' ? 'Apple Neural Engine · Core ML' : 'CPU · ONNX Runtime'
     preferences = info.preferences
     smartCorrectionStatus = info.smartCorrection
     asrStatus = info.asrStatus
     settingsDataStore.update({ vocabulary: info.vocabulary, history: info.history })
+    modelSettingsStore.update({
+      platform: info.platform,
+      asr: info.asrStatus,
+      smartCorrection: info.smartCorrection,
+      smartCorrectionEnabled: info.preferences.smartCorrectionEnabled
+    })
     renderPreferences()
     renderOverlayPlacement(info.overlayPlacement)
     onboardingController.update({

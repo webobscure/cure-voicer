@@ -18,6 +18,8 @@ import type { AppPreferences } from '../../shared/contracts'
 import { VocabularyPage } from '../features/vocabulary/VocabularyPage'
 import { HistoryPage } from '../features/history/HistoryPage'
 import { settingsDataStore } from './settings-data-store'
+import { ModelsPage } from '../features/models/ModelsPage'
+import { modelSettingsStore } from './model-settings-store'
 
 let diagnosticsRoot: Root | null = null
 let editorRoot: Root | null = null
@@ -29,6 +31,7 @@ let clipboardRoot: Root | null = null
 let onboardingRoot: Root | null = null
 let vocabularyRoot: Root | null = null
 let historyRoot: Root | null = null
+let modelsRoot: Root | null = null
 
 export function mountReactFeatures(
   api: CureVoicerApi | undefined,
@@ -45,7 +48,8 @@ export function mountReactFeatures(
   const onboardingContainer = document.getElementById('onboardingReactRoot')
   const vocabularyContainer = document.getElementById('vocabularyReactRoot')
   const historyContainer = document.getElementById('historyReactRoot')
-  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer && !vocabularyContainer && !historyContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot || vocabularyRoot || historyRoot) return
+  const modelsContainer = document.getElementById('modelsReactRoot')
+  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer && !vocabularyContainer && !historyContainer && !modelsContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot || vocabularyRoot || historyRoot || modelsRoot) return
 
   if (onboardingContainer) {
     onboardingRoot = createRoot(onboardingContainer)
@@ -64,6 +68,7 @@ export function mountReactFeatures(
     if (clipboardContainer) clipboardContainer.textContent = 'Буфер доступен только в приложении.'
     if (vocabularyContainer) vocabularyContainer.textContent = 'Vocabulary is available only in the desktop application.'
     if (historyContainer) historyContainer.textContent = 'History is available only in the desktop application.'
+    if (modelsContainer) modelsContainer.textContent = 'Models are available only in the desktop application.'
     return
   }
 
@@ -103,5 +108,9 @@ export function mountReactFeatures(
   if (historyContainer) {
     historyRoot = createRoot(historyContainer)
     historyRoot.render(<StrictMode><I18nProvider store={i18n}><HistoryPage client={client} store={settingsDataStore} /></I18nProvider></StrictMode>)
+  }
+  if (modelsContainer) {
+    modelsRoot = createRoot(modelsContainer)
+    modelsRoot.render(<StrictMode><I18nProvider store={i18n}><ModelsPage client={client} store={modelSettingsStore} /></I18nProvider></StrictMode>)
   }
 }
