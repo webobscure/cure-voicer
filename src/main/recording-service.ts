@@ -14,6 +14,7 @@ import type { ActiveApplicationProvider } from '../modules/insertion/ports'
 import type { ActiveApplicationContext, InsertionMode } from '../shared/types/insertion'
 import { randomUUID } from 'node:crypto'
 import type { TransformationRegistry } from '../modules/transformations/transformation-registry'
+import type { VoiceCommandRegistry } from '../modules/commands/voice-command-registry'
 
 export class RecordingService {
   private previousTranscript = ''
@@ -24,7 +25,8 @@ export class RecordingService {
     private readonly transcriptCorrector?: TranscriptCorrector,
     private readonly textInserter?: TextInsertionService,
     private readonly activeApplications?: ActiveApplicationProvider,
-    private readonly transformations?: TransformationRegistry
+    private readonly transformations?: TransformationRegistry,
+    private readonly voiceCommands?: VoiceCommandRegistry
   ) {}
 
   get recordingsDirectory(): string {
@@ -105,6 +107,37 @@ export class RecordingService {
           })
       }
       let transcript = postProcessTranscript(correctedText, preferredTerms)
+      if (transcript && this.voiceCommands) {
+        const match = this.voiceCommands.detect(transcript)
+        if (match) {
+          const command = await this.voiceCommands.execute(match, {
+            operationId: options.operationId ?? randomUUID(),
+            transcript,
+            editorText: this.previousTranscript,
+            activeApplication: options.activeApplication,
+            signal: options.signal
+          })
+          if (command.requiresConfirmation || !command.handled) {
+            return {
+              recordingPath: keepRecording ? recordingPath : '',
+              transcript: '',
+              engine: result.providerId,
+              latencyMs: Math.round(performance.now() - startedAt),
+              insertion: 'skipped'
+            }
+          }
+          if (command.replacementText === undefined) {
+            return {
+              recordingPath: keepRecording ? recordingPath : '',
+              transcript: '',
+              engine: result.providerId,
+              latencyMs: Math.round(performance.now() - startedAt),
+              insertion: 'skipped'
+            }
+          }
+          transcript = command.replacementText
+        }
+      }
       if (
         transcript &&
         options.transformationPresetId &&

@@ -7,6 +7,7 @@ export interface PlatformTextInputPort {
   insertWithKeyboard(text: string, signal?: AbortSignal): Promise<void>
   insertWithAccessibility(text: string, signal?: AbortSignal): Promise<void>
   pasteShortcut(signal?: AbortSignal): Promise<void>
+  copyShortcut(signal?: AbortSignal): Promise<void>
 }
 
 export interface ActiveApplicationProvider {

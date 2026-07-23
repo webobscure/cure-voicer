@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCorrectionPrompt,
+  buildTransformationPrompt,
+  sanitizeModelTransformation,
   sanitizeModelCorrection,
   shouldRunContextualCorrection
 } from '../src/shared/smart-correction'
@@ -15,6 +17,26 @@ describe('buildCorrectionPrompt', () => {
     expect(prompt).toContain('Мы работаем с fetch API.')
     expect(prompt).toContain('AbortController, Cure Voicer')
     expect(prompt).toContain('создай аборт контроллер')
+  })
+})
+
+describe('local transformation prompt', () => {
+  it('separates instruction, target language and source text', () => {
+    const prompt = buildTransformationPrompt(
+      'Привет\0 мир',
+      'Переведи кратко',
+      'English'
+    )
+    expect(prompt).toContain('Instruction:\nПереведи кратко')
+    expect(prompt).toContain('Target language:\nEnglish')
+    expect(prompt).toContain('Text:\nПривет мир')
+  })
+
+  it('strips model reasoning and refuses pathological expansion', () => {
+    expect(
+      sanitizeModelTransformation('<think>hidden</think>\n```text\nHello\n```', 'Привет')
+    ).toBe('Hello')
+    expect(sanitizeModelTransformation('x'.repeat(5_000), 'short')).toBe('short')
   })
 })
 

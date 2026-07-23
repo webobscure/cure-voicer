@@ -11,6 +11,7 @@ export interface ClipboardPort {
   readSnapshot(): Promise<ClipboardSnapshot>
   writeSnapshot(snapshot: ClipboardSnapshot): Promise<void>
   writeText(text: string): Promise<void>
+  readText(): Promise<string>
   clear(): Promise<void>
 }
 

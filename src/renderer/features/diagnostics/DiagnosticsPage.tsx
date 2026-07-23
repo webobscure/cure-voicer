@@ -70,6 +70,15 @@ export function DiagnosticsPage({ client }: DiagnosticsPageProps): React.JSX.Ele
           diagnostics.currentInsertion === 'accessibility'
         }
       />
+      <DiagnosticCard
+        label="Конфликты горячих клавиш"
+        value={
+          diagnostics.shortcutConflicts.length > 0
+            ? diagnostics.shortcutConflicts.join(', ')
+            : 'Не обнаружены'
+        }
+        ok={diagnostics.shortcutConflicts.length === 0}
+      />
       <p className="react-diagnostics-note">
         Диагностика не включает распознанный текст, содержимое буфера обмена или аудио.
       </p>

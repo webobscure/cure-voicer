@@ -105,7 +105,12 @@ const api: CureVoicerApi = {
     return () => ipcRenderer.removeListener(IPC.internalEditorText, listener)
   },
   transformText: (request) => ipcRenderer.invoke(IPC.transformText, request),
-  insertEditorText: (text) => ipcRenderer.invoke(IPC.insertEditorText, { text })
+  insertEditorText: (text) => ipcRenderer.invoke(IPC.insertEditorText, { text }),
+  onSettingsNavigate: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, pane: string): void => callback(pane)
+    ipcRenderer.on(IPC.settingsNavigate, listener)
+    return () => ipcRenderer.removeListener(IPC.settingsNavigate, listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('cureVoicer', api)

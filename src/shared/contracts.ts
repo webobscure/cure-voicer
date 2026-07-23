@@ -31,7 +31,8 @@ export const IPC = {
   asrStatusChanged: 'models:asr-status-changed',
   internalEditorText: 'editor:open-text',
   transformText: 'editor:transform-text',
-  insertEditorText: 'editor:insert-text'
+  insertEditorText: 'editor:insert-text',
+  settingsNavigate: 'settings:navigate'
 } as const
 
 export type RecordingState =
@@ -143,6 +144,7 @@ export interface AppInfo {
   history: DictationHistoryItem[]
   smartCorrection: SmartCorrectionStatus
   asrStatus: AsrStatus
+  shortcutConflicts: string[]
 }
 
 export interface OverlayInfo {
@@ -221,6 +223,7 @@ export interface CureVoicerApi {
   onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void
   transformText(request: TransformTextRequest): Promise<TransformTextResponse>
   insertEditorText(text: string): Promise<import('./types/insertion').InsertionResult>
+  onSettingsNavigate(callback: (pane: string) => void): () => void
 }
 
 export interface CureVoicerOverlayApi {

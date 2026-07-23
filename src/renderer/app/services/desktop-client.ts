@@ -16,6 +16,7 @@ export interface DiagnosticsViewModel {
   globalInputAvailable: boolean
   onboardingCompleted: boolean
   currentInsertion: InsertionMode
+  shortcutConflicts: string[]
 }
 
 export interface DesktopClient {
@@ -42,7 +43,8 @@ export class ElectronDesktopClient implements DesktopClient {
       onboardingCompleted: info.preferences.onboardingCompleted,
       currentInsertion: info.preferences.autoPaste
         ? info.preferences.insertionMode
-        : 'clipboard-only'
+        : 'clipboard-only',
+      shortcutConflicts: info.shortcutConflicts
     }
   }
 

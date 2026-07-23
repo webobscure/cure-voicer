@@ -22,6 +22,10 @@ export class ElectronClipboardPort implements ClipboardPort {
     clipboard.writeText(text)
   }
 
+  async readText(): Promise<string> {
+    return clipboard.readText()
+  }
+
   async clear(): Promise<void> {
     clipboard.clear()
   }

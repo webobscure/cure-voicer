@@ -177,15 +177,17 @@ the edited text.
 
 ## Stage 5 — commands, selection and shortcuts
 
-Status: **not started**
+Status: **in progress**
 
-- [ ] Define `VoiceCommand`, registry, aliases and enable/disable persistence.
-- [ ] Add conservative command-intent detection and dangerous-action confirmation.
-- [ ] Implement newline/paragraph/punctuation/edit/insert/copy/transform/settings/
+- [x] Define `VoiceCommand`, registry, editable aliases and enable/disable configuration.
+- [x] Add conservative command-intent detection and dangerous-action confirmation.
+- [ ] Connect newline/paragraph/punctuation/edit/insert/copy/transform/settings/
       repeat/clear/note commands and undo.
-- [ ] Add selected-text acquisition/replacement with safe rollback.
-- [ ] Replace shortcut globals with action IDs, conflict probes and preset bindings.
-- [ ] Add command false-positive and selection failure tests.
+- [x] Add selected-text acquisition/replacement with safe clipboard rollback and a
+      global transformation shortcut.
+- [ ] Replace remaining shortcut globals with action IDs and persisted preset bindings.
+- [x] Add command false-positive, confirmation, shortcut-conflict and selection
+      failure tests.
 
 ## Stage 6 — active application integrations
 

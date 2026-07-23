@@ -26,6 +26,12 @@ describe('postProcessTranscript', () => {
     )
   })
 
+  it('supports paragraph and period inline commands', () => {
+    expect(
+      postProcessTranscript('Первый блок новый абзац второй блок поставь точку дальше')
+    ).toBe('Первый блок\n\nвторой блок. дальше')
+  })
+
   it('still applies terms from the personal vocabulary', () => {
     expect(postProcessTranscript('запусти cure voicer', ['Cure Voicer'])).toBe(
       'запусти Cure Voicer'

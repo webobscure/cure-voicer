@@ -39,6 +39,11 @@ class MemoryClipboard implements ClipboardPort {
     this.current = snapshot({ 'text/plain': text })
   }
 
+  async readText(): Promise<string> {
+    const plain = this.current.formats.find((entry) => entry.format === 'text/plain')
+    return plain ? new TextDecoder().decode(plain.data) : ''
+  }
+
   async clear(): Promise<void> {
     this.writes.push('clear')
     this.current = { formats: [] }

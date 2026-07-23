@@ -12,7 +12,8 @@ describe('KeyboardInsertionProvider', () => {
       supportsPasteShortcut: vi.fn(async () => true),
       insertWithKeyboard,
       insertWithAccessibility: vi.fn(async () => undefined),
-      pasteShortcut: vi.fn(async () => undefined)
+      pasteShortcut: vi.fn(async () => undefined),
+      copyShortcut: vi.fn(async () => undefined)
     }
     const provider = new KeyboardInsertionProvider(input)
     const context: InsertionContext = {

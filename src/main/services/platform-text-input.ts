@@ -102,6 +102,31 @@ export class PlatformTextInputService implements PlatformTextInputPort {
     }
     throw new Error('Paste shortcut is unsupported on this platform')
   }
+
+  async copyShortcut(signal?: AbortSignal): Promise<void> {
+    throwIfAborted(signal)
+    if (process.platform === 'darwin') {
+      await execFileAsync(
+        '/usr/bin/osascript',
+        ['-e', 'tell application "System Events" to key code 8 using command down'],
+        { timeout: 5_000, signal }
+      )
+      return
+    }
+    if (process.platform === 'win32') {
+      await execFileAsync(
+        'powershell.exe',
+        [
+          '-NoLogo', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
+          '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^c')"
+        ],
+        { windowsHide: true, timeout: 5_000, signal }
+      )
+      return
+    }
+    throw new Error('Copy shortcut is unsupported on this platform')
+  }
 }
 
 const windowsUnicodeScript = String.raw`

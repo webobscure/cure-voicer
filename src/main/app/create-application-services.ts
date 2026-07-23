@@ -22,6 +22,10 @@ import { DeferredInternalEditorPort } from '../services/internal-editor-port'
 import { createBuiltInTransformations } from '../../modules/transformations/presets'
 import { TransformationRegistry } from '../../modules/transformations/transformation-registry'
 import { ActiveApplicationActivator } from '../services/active-application-activator'
+import { SelectedTextService } from '../../modules/selection/selected-text-service'
+import { VoiceCommandRegistry } from '../../modules/commands/voice-command-registry'
+import { createBuiltInVoiceCommands } from '../../modules/commands/built-in-commands'
+import { CommandUiBridge } from '../services/command-ui-bridge'
 
 export interface ApplicationServices {
   asrEngine: AsrEngine
@@ -33,6 +37,9 @@ export interface ApplicationServices {
   transformations: TransformationRegistry
   insertion: TextInsertionService
   applicationActivator: ActiveApplicationActivator
+  selectedText: SelectedTextService
+  voiceCommands: VoiceCommandRegistry
+  commandUi: CommandUiBridge
   recording: RecordingService
 }
 
@@ -78,6 +85,31 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
     createBuiltInTransformations(smartCorrection)
   )
   const applicationActivator = new ActiveApplicationActivator()
+  const selectedText = new SelectedTextService(clipboard, input)
+  const commandUi = new CommandUiBridge()
+  const voiceCommands = new VoiceCommandRegistry(
+    createBuiltInVoiceCommands({
+      cancel: async () => undefined,
+      insertEditorText: async (context) => context.editorText,
+      copyEditorText: async (context) => clipboard.writeText(context.editorText),
+      openSettings: async (context) => commandUi.dispatch('open-settings', context.editorText),
+      repeatLastInsertion: async (context) => context.editorText,
+      clearEditor: async (context) => commandUi.dispatch('clear-editor', context.editorText),
+      saveNote: async (context) => commandUi.dispatch('save-note', context.editorText),
+      transformEditor: async (context, presetId, targetLanguage) =>
+        transformations
+          .transform(context.editorText, {
+            operationId: context.operationId,
+            presetId,
+            targetLanguage,
+            activeApplication: context.activeApplication,
+            preferredTerms: [],
+            allowExternalService: false,
+            signal: context.signal
+          })
+          .then((result) => result.transformedText)
+    })
+  )
 
   return {
     asrEngine,
@@ -89,13 +121,17 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
     transformations,
     insertion,
     applicationActivator,
+    selectedText,
+    voiceCommands,
+    commandUi,
     recording: new RecordingService(
       transcriptionProviders,
       asrEngine.id,
       smartCorrection,
       insertion,
       activeApplications,
-      transformations
+      transformations,
+      voiceCommands
     )
   }
 }

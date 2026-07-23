@@ -99,7 +99,11 @@ const developerTerms: DeveloperTermRule[] = [
   { canonical: 'props', aliases: ['props', 'пропсы'] }
 ]
 
-const newlineCommand = /[ \t]*[,.;:!?]?[ \t]*(?:новая строка|new line)[ \t]*[,.;:!?]?[ \t]*/giu
+const inlineCommands: readonly [RegExp, string][] = [
+  [/[ \t]*[,.;:!?]?[ \t]*(?:новый абзац|new paragraph)[ \t]*[,.;:!?]?[ \t]*/giu, '\n\n'],
+  [/[ \t]*[,.;:!?]?[ \t]*(?:новая строка|new line)[ \t]*[,.;:!?]?[ \t]*/giu, '\n'],
+  [/[ \t]*[,.;:!?]?[ \t]*(?:поставь точку|period)[ \t]*[,.;:!?]?[ \t]*/giu, '. ']
+]
 
 export function postProcessTranscript(text: string, preferredTerms: string[] = []): string {
   let result = text.trim()
@@ -131,7 +135,9 @@ export function postProcessTranscript(text: string, preferredTerms: string[] = [
     )
 
   result = applyPreferredTerms(result, preferredTerms)
-  result = result.replace(newlineCommand, '\n')
+  for (const [pattern, replacement] of inlineCommands) {
+    result = result.replace(pattern, replacement)
+  }
   return result.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n')
 }
 

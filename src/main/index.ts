@@ -81,6 +81,8 @@ const {
   transformations,
   insertion,
   applicationActivator,
+  selectedText,
+  commandUi,
   recording: recordingService,
   smartCorrection: smartCorrectionService
 } = applicationServices
@@ -126,6 +128,7 @@ let holdKeyPressed = false
 let activeHoldKeyCode: number = UiohookKey.CtrlRight
 let hotkeyCaptureActive = false
 let hotkeyCaptureSafetyTimer: ReturnType<typeof setTimeout> | null = null
+let shortcutConflicts: string[] = []
 
 dictationMachine.subscribe((snapshot) => synchronizeLegacyPresentation(snapshot))
 internalEditor.setHandler((input) => {
@@ -137,6 +140,35 @@ internalEditor.setHandler((input) => {
     applicationName: input.activeApplication.applicationName,
     insertionMode: input.insertionMode
   })
+})
+commandUi.setListener(async (event, text) => {
+  if (event === 'open-settings') {
+    showWindow()
+    return
+  }
+  if (event === 'clear-editor') {
+    latestEditorInput = null
+    mainWindow?.webContents.send(IPC.internalEditorText, {
+      originalText: '',
+      text: '',
+      insertionMode: 'internal-editor'
+    })
+    return
+  }
+  if (!text) return
+  const note: DictationHistoryItem = {
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+    text,
+    durationMs: 0,
+    latencyMs: 0,
+    insertion: 'skipped'
+  }
+  history = [
+    note,
+    ...history
+  ].slice(0, 100)
+  await saveAppState()
 })
 
 interface PersistedAppState {
@@ -310,10 +342,10 @@ function rebuildTrayMenu(appTray = tray): void {
       enabled:
         !preferences.onboardingCompleted ||
         (currentState !== 'starting' && currentState !== 'transcribing'),
-      click: preferences.onboardingCompleted ? requestRecordingToggle : showWindow
+      click: preferences.onboardingCompleted ? requestRecordingToggle : () => showWindow()
     },
     { type: 'separator' },
-    { label: 'Настройки…', click: showWindow },
+    { label: 'Настройки…', click: () => showWindow() },
     {
       label: 'Выйти',
       click: quitApplication
@@ -336,7 +368,8 @@ function registerIpc(): void {
       vocabulary,
       history,
       smartCorrection: smartCorrectionService.status,
-      asrStatus: asrEngine.status
+      asrStatus: asrEngine.status,
+      shortcutConflicts
     }
   })
 
@@ -852,6 +885,7 @@ function handleGlobalKeyUp(event: UiohookKeyboardEvent): void {
 function configureRecordingActivation(nextPreferences: AppPreferences): void {
   if (holdKeyPressed) sendRecordingCommand('stop')
   globalShortcut.unregisterAll()
+  shortcutConflicts = []
   stopKeyboardHook()
 
   if (nextPreferences.activationMode === 'hold') {
@@ -859,6 +893,7 @@ function configureRecordingActivation(nextPreferences: AppPreferences): void {
       process.platform === 'darwin' &&
       !systemPreferences.isTrustedAccessibilityClient(false)
     ) {
+      registerSecondaryShortcuts()
       return
     }
     activeHoldKeyCode = holdKeyCode(nextPreferences.holdKey)
@@ -866,12 +901,60 @@ function configureRecordingActivation(nextPreferences: AppPreferences): void {
     uIOhook.on('keyup', handleGlobalKeyUp)
     uIOhook.start()
     keyboardHookRunning = true
+    registerSecondaryShortcuts()
     return
   }
 
   if (!globalShortcut.register(nextPreferences.accelerator, requestRecordingToggle)) {
     throw new Error('Эта горячая клавиша уже занята другой программой')
   }
+  registerSecondaryShortcuts()
+}
+
+function registerSecondaryShortcuts(): void {
+  registerOptionalShortcut('CommandOrControl+Shift+R', () => {
+    void processSelectedText().catch((error) => {
+      console.warn('Selected text processing failed', error)
+    })
+  })
+  registerOptionalShortcut('CommandOrControl+Shift+E', () => showWindow('editor'))
+  registerOptionalShortcut('CommandOrControl+Shift+H', () => showWindow('history'))
+  registerOptionalShortcut('CommandOrControl+Shift+Backspace', () => {
+    cancelActiveDictation('shortcut')
+  })
+}
+
+function registerOptionalShortcut(accelerator: string, callback: () => void): void {
+  if (!globalShortcut.register(accelerator, callback)) {
+    shortcutConflicts.push(accelerator)
+    console.warn(`Optional shortcut is unavailable: ${accelerator}`)
+  }
+}
+
+async function processSelectedText(): Promise<void> {
+  const activeApplication = await activeApplications.getActiveApplication()
+  const presetId =
+    preferences.transformationPresetId !== 'none'
+      ? preferences.transformationPresetId
+      : smartCorrectionService.status.state === 'ready'
+        ? 'written-style'
+        : 'remove-fillers'
+  await selectedText.process(
+    {
+      operationId: randomUUID(),
+      activeApplication
+    },
+    async (text) =>
+      transformations
+        .transform(text, {
+          operationId: randomUUID(),
+          presetId,
+          activeApplication,
+          preferredTerms: vocabulary,
+          allowExternalService: false
+        })
+        .then((result) => result.transformedText)
+  )
 }
 
 function setHotkeyCapture(active: boolean): void {
@@ -982,7 +1065,7 @@ function showOverlayContextMenu(): void {
   endOverlayDrag()
 
   const menu = Menu.buildFromTemplate([
-    { label: 'Настройки…', click: showWindow },
+    { label: 'Настройки…', click: () => showWindow() },
     {
       label: 'Скрыть до следующей диктовки',
       enabled: currentState === 'idle' || currentState === 'error',
@@ -1313,7 +1396,7 @@ function settingsFilePath(): string {
   return path.join(app.getPath('userData'), 'settings.json')
 }
 
-function showWindow(): void {
+function showWindow(pane?: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     const replacement = createWindow()
     mainWindow = replacement
@@ -1321,6 +1404,7 @@ function showWindow(): void {
       if (replacement.isDestroyed()) return
       replacement.show()
       replacement.focus()
+      if (pane) replacement.webContents.send(IPC.settingsNavigate, pane)
     })
     return
   }
@@ -1331,12 +1415,14 @@ function showWindow(): void {
       if (window.isDestroyed()) return
       window.show()
       window.focus()
+      if (pane) window.webContents.send(IPC.settingsNavigate, pane)
     })
     return
   }
 
   window.show()
   window.focus()
+  if (pane) window.webContents.send(IPC.settingsNavigate, pane)
 }
 
 function quitApplication(): void {

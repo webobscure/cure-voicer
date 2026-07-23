@@ -408,6 +408,7 @@ function selectPane(paneId: string): void {
 }
 
 api?.onInternalEditorText(() => selectPane('editor'))
+api?.onSettingsNavigate((pane) => selectPane(pane))
 
 function renderOverlayPlacement(placement: OverlayPlacement): void {
   placementButtons.forEach((button) => {

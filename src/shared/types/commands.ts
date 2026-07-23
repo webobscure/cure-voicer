@@ -5,7 +5,14 @@ export interface VoiceCommandContext {
   transcript: string
   editorText: string
   activeApplication?: ActiveApplicationContext
+  confirmed?: boolean
   signal?: AbortSignal
+}
+
+export interface VoiceCommandMatch {
+  commandId: string
+  phrase: string
+  explicitPrefix: boolean
 }
 
 export interface VoiceCommandResult {
@@ -22,4 +29,3 @@ export interface VoiceCommand {
   readonly dangerous?: boolean
   execute(context: VoiceCommandContext): Promise<VoiceCommandResult>
 }
-
