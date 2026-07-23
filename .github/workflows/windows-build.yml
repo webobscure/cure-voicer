@@ -38,6 +38,9 @@ jobs:
       - name: Verify Windows native runtimes
         run: node -e "require('sherpa-onnx-node'); require('uiohook-napi'); console.log('Windows native runtimes loaded')"
 
+      - name: Prepare Electron runtime
+        run: node -e "console.log(require('electron'))"
+
       - name: Run Electron E2E
         run: npm run test:e2e
 
