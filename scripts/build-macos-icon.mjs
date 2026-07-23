@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const root = process.cwd()
-const sourcePath = path.join(root, 'assets', 'branding', 'cure-voicer-liquid-glass-logo.png')
+const sourcePath = path.join(root, 'assets', 'branding', 'cure-voicer-keycap-c-logo-v3.png')
 const outputPath = path.join(root, 'assets', 'branding', 'cure-voicer.icns')
 const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cure-voicer-icon-'))
 const binary = path.join(

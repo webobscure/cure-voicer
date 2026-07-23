@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { AppPreferences, CureVoicerApi } from '../../shared/contracts'
-import brandLogoUrl from '../../../assets/branding/cure-voicer-liquid-glass-logo.png'
+import brandLogoUrl from '../../../assets/branding/cure-voicer-keycap-c-logo-v3.png'
 import { I18nProvider } from './i18n/i18n-context'
 import type { I18nStore } from './i18n/i18n-store'
 import { ElectronDesktopClient } from './services/desktop-client'

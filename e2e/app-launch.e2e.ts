@@ -21,6 +21,10 @@ test('launches hardened settings UI and exposes only the typed preload surface',
     const page = application.windows().find((candidate) => candidate.url().includes('/index.html'))
     if (!page) throw new Error('Settings window was not created')
     await expect(page).toHaveTitle('Cure Voicer')
+    await expect(page.locator('.sidebar-brand img')).toHaveAttribute(
+      'src',
+      /cure-voicer-keycap-c-logo-v3/
+    )
     const security = await page.evaluate(() => ({
       requireType: typeof Reflect.get(window, 'require'),
       processType: typeof Reflect.get(window, 'process'),

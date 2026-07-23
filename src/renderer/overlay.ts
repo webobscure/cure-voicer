@@ -4,7 +4,7 @@ import type {
   OverlayMotion,
   RecordingState
 } from '../shared/contracts'
-import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
+import brandLogoUrl from '../../assets/branding/cure-voicer-keycap-c-logo-v3.png'
 import { resolveLocale, type ResolvedLocale } from './app/i18n/i18n-store'
 
 const caption = document.getElementById('overlayCaption')
