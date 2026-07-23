@@ -1,7 +1,9 @@
 # Update security and rollout policy
 
-Automatic update installation is intentionally disabled in the current unsigned
-beta. A release may enable it only after all conditions below are met.
+Automatic update installation is automatically disabled in an unsigned build.
+`SignedUpdateService` first verifies the current `.app` with `codesign` or the
+Windows executable with `Get-AuthenticodeSignature`; it never contacts the feed
+unless that check succeeds. Signed builds honor the user's update switch.
 
 ## Trust requirements
 
@@ -24,7 +26,8 @@ beta. A release may enable it only after all conditions below are met.
 4. Never roll back by serving a lower version. Publish a new signed patch that
    reverses the faulty change and preserves forward-only SQLite migrations.
 
-Update checks must expose a user-visible disable switch and use no dictated text,
+Update checks expose a user-visible disable switch and use no dictated text,
 clipboard data or application identity. Until an updater implementation has tests
-for signature failure, partial download, offline startup, migration failure and
-rollback, `publish` remains disabled in `electron-builder.yml`.
+for partial download and migration rollback are complete, releases should remain
+prerelease-only. Feed coordinates are build-time GitHub configuration and cannot
+be supplied by a renderer.

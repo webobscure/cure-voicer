@@ -25,6 +25,7 @@ asarUnpack:
 
 win:
   icon: assets/branding/cure-voicer.ico
+  verifyUpdateCodeSignature: true
   target:
     - target: portable
       arch:
@@ -71,4 +72,8 @@ mac:
     - from: native/macos-asr/.build/release/cure-voicer-input
       to: bin/cure-voicer-input
 
-publish: null
+publish:
+  provider: github
+  owner: webobscure
+  repo: cure-voicer
+  releaseType: release

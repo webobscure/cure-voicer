@@ -129,6 +129,7 @@ export interface AppPreferences {
   historyEnabled: boolean
   clipboardHistoryEnabled: boolean
   cloudProcessingEnabled: boolean
+  automaticUpdatesEnabled: boolean
   clipboardRetentionDays: number
   theme: 'system' | 'light' | 'dark'
   locale: 'system' | 'ru' | 'en'

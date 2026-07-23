@@ -62,6 +62,10 @@ import { isPotentiallySensitiveText } from '../modules/clipboard/sensitive-text'
 import type { ClipboardHistoryItem, TextTemplate } from '../shared/contracts'
 import type { ActiveApplicationContext } from '../shared/types/insertion'
 import { SecretVault } from './security/secret-vault'
+import electronUpdater from 'electron-updater'
+import { SignedUpdateService } from './services/signed-update-service'
+import { isCurrentApplicationSigned } from './security/application-signature'
+import { ConsoleDiagnosticSink, StructuredLogger } from '../modules/diagnostics/structured-logger'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const smokeTestMode = process.env.CURE_VOICER_SMOKE_TEST === '1'
@@ -129,6 +133,7 @@ let preferences: AppPreferences = {
   historyEnabled: false,
   clipboardHistoryEnabled: false,
   cloudProcessingEnabled: false,
+  automaticUpdatesEnabled: true,
   clipboardRetentionDays: 7,
   theme: 'system',
   locale: 'system',
@@ -145,6 +150,11 @@ let templates: TextTemplate[] = []
 let clipboardHistory: ClipboardHistoryItem[] = []
 let localDatabase: LocalDatabase | null = null
 let secretVault: SecretVault | null = null
+const updateService = new SignedUpdateService(
+  electronUpdater.autoUpdater,
+  async () => app.isPackaged && isCurrentApplicationSigned(),
+  new StructuredLogger('updates', new ConsoleDiagnosticSink())
+)
 let isQuitting = false
 let applicationResourcesDisposed = false
 let isProgrammaticOverlayMove = false
@@ -1522,6 +1532,10 @@ async function loadAppState(): Promise<void> {
           typeof stored.cloudProcessingEnabled === 'boolean'
             ? stored.cloudProcessingEnabled
             : false,
+        automaticUpdatesEnabled:
+          typeof stored.automaticUpdatesEnabled === 'boolean'
+            ? stored.automaticUpdatesEnabled
+            : true,
         clipboardRetentionDays:
           typeof stored.clipboardRetentionDays === 'number' &&
           Number.isInteger(stored.clipboardRetentionDays) &&
@@ -1614,6 +1628,7 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     'historyEnabled',
     'clipboardHistoryEnabled',
     'cloudProcessingEnabled',
+    'automaticUpdatesEnabled',
     'keepRecordings',
     'showOverlayWhenIdle',
     'smartCorrectionEnabled',
@@ -1971,6 +1986,7 @@ function disposeApplicationResources(): void {
   endOverlayDrag()
   asrEngine.dispose?.()
   smartCorrectionService.dispose()
+  updateService.stop()
   localDatabase?.close()
   localDatabase = null
 }
@@ -1988,6 +2004,7 @@ registerApplicationLifecycle({
       encrypt: (value) => safeStorage.encryptString(value),
       decrypt: (value) => safeStorage.decryptString(value)
     })
+    void updateService.start(preferences.automaticUpdatesEnabled)
     applyVoiceCommandPreferences()
 
     session.defaultSession.setPermissionRequestHandler(

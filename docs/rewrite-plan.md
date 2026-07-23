@@ -243,7 +243,7 @@ Status: **in progress**
 - [x] Add IPC integration, Electron smoke and Playwright E2E suites.
 - [ ] Test packaged macOS/Windows builds and native runtime loading.
 - [ ] Configure macOS entitlements/signing/notarization and Windows signing.
-- [ ] Add signed auto-update policy with staged rollout and rollback notes.
+- [x] Add signed auto-update policy with staged rollout and rollback notes.
 - [x] Finish all extension and platform documentation.
 
 The first Electron E2E test caught and fixed a production-only preload failure:

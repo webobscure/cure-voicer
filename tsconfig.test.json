@@ -27,6 +27,7 @@
     "src/main/asr/types.ts",
     "src/main/ipc/**/*.ts",
     "src/main/storage/**/*.ts",
+    "src/main/services/signed-update-service.ts",
     "src/main/security/**/*.ts"
   ]
 }

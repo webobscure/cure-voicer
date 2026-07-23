@@ -82,6 +82,7 @@ export const legacyPreferencesPatchSchema = z
     historyEnabled: z.boolean(),
     clipboardHistoryEnabled: z.boolean(),
     cloudProcessingEnabled: z.boolean(),
+    automaticUpdatesEnabled: z.boolean(),
     clipboardRetentionDays: z.number().int().min(1).max(365),
     theme: z.enum(['system', 'light', 'dark']),
     locale: z.enum(['system', 'ru', 'en']),

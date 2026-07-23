@@ -69,6 +69,7 @@ function preferences(): AppPreferences {
     historyEnabled: false,
     clipboardHistoryEnabled: false,
     cloudProcessingEnabled: false,
+    automaticUpdatesEnabled: true,
     clipboardRetentionDays: 7,
     theme: 'system',
     locale: 'system',
