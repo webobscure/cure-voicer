@@ -93,6 +93,7 @@ const {
   applicationActivator,
   selectedText,
   commandUi,
+  integrations,
   voiceCommands,
   recording: recordingService,
   smartCorrection: smartCorrectionService
@@ -116,6 +117,7 @@ let preferences: AppPreferences = {
   transformationPresetId: 'none',
   shortcutBindings: { ...defaultShortcutBindings },
   voiceCommands: {},
+  integrationRules: [],
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -497,6 +499,31 @@ function registerIpc(): void {
 
       const operationId = prepareMachineForAudio(validatedPayload.sessionId)
       activeRecordingAbortController = new AbortController()
+      const activeApplication = activeApplicationByOperation.get(operationId) ?? {
+        platform:
+          process.platform === 'darwin' || process.platform === 'win32'
+            ? process.platform
+            : 'unknown',
+        capturedAt: new Date().toISOString()
+      }
+      const integration = await integrations.resolve(
+        activeApplication,
+        preferences.integrationRules
+      )
+      const insertionMode =
+        preferences.insertionMode === 'keyboard'
+          ? integration.strategy.preferredMode
+          : preferences.insertionMode
+      const isIde = integration.integrationId === 'vscode' || integration.integrationId === 'jetbrains'
+      const transformationPresetId = integration.matchedRuleId
+        ? integration.transformationPresetId ?? 'none'
+        : isIde
+          ? 'none'
+          : preferences.transformationPresetId !== 'none'
+            ? preferences.transformationPresetId
+            : preferences.smartCorrectionEnabled
+              ? integration.transformationPresetId ?? 'none'
+              : 'none'
 
       activeRecordingFinish = recordingService.finish(validatedPayload, {
         autoPaste: preferences.autoPaste,
@@ -505,10 +532,10 @@ function registerIpc(): void {
         smartCorrectionEnabled: preferences.smartCorrectionEnabled,
         signal: activeRecordingAbortController.signal,
         operationId,
-        activeApplication: activeApplicationByOperation.get(operationId),
-        insertionMode: preferences.insertionMode,
+        activeApplication,
+        insertionMode,
         blockedApplicationIds: preferences.blockedApplicationIds,
-        transformationPresetId: preferences.transformationPresetId
+        transformationPresetId
       })
       try {
         const result = await activeRecordingFinish
@@ -969,6 +996,14 @@ function registerSecondaryShortcuts(nextPreferences: AppPreferences): void {
     const callback = actions[actionId]
     if (callback && accelerator) registerOptionalShortcut(accelerator, callback)
   }
+  for (const rule of nextPreferences.integrationRules) {
+    if (!rule.enabled || !rule.shortcut) continue
+    registerOptionalShortcut(rule.shortcut, () => {
+      void processSelectedText(rule.id).catch((error) => {
+        console.warn(`Integration shortcut failed: ${rule.id}`, error)
+      })
+    })
+  }
 }
 
 async function repeatLastInsertion(): Promise<void> {
@@ -1005,10 +1040,20 @@ function registerOptionalShortcut(accelerator: string, callback: () => void): vo
   }
 }
 
-async function processSelectedText(): Promise<void> {
+async function processSelectedText(requiredRuleId?: string): Promise<void> {
   const activeApplication = await activeApplications.getActiveApplication()
+  const integration = await integrations.resolve(
+    activeApplication,
+    preferences.integrationRules
+  )
+  if (requiredRuleId && integration.matchedRuleId !== requiredRuleId) return
+  if (integration.strategy.blockReason) {
+    throw new Error(integration.strategy.blockReason)
+  }
   const presetId =
-    preferences.transformationPresetId !== 'none'
+    integration.matchedRuleId && integration.transformationPresetId
+      ? integration.transformationPresetId
+      : preferences.transformationPresetId !== 'none'
       ? preferences.transformationPresetId
       : smartCorrectionService.status.state === 'ready'
         ? 'written-style'
@@ -1277,6 +1322,9 @@ async function loadAppState(): Promise<void> {
         voiceCommands: isVoiceCommandPreferences(stored.voiceCommands)
           ? stored.voiceCommands
           : {},
+        integrationRules: isIntegrationRules(stored.integrationRules)
+          ? stored.integrationRules
+          : [],
         keepRecordings:
           typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
@@ -1389,6 +1437,9 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   if (patch.voiceCommands !== undefined) {
     next.voiceCommands = patch.voiceCommands
   }
+  if (patch.integrationRules !== undefined) {
+    next.integrationRules = patch.integrationRules
+  }
   if (patch.autoStopSilenceMs !== undefined) {
     if (
       !Number.isInteger(patch.autoStopSilenceMs) ||
@@ -1408,7 +1459,8 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     next.activationMode !== preferences.activationMode ||
     next.accelerator !== preferences.accelerator ||
     next.holdKey !== preferences.holdKey ||
-    next.shortcutBindings !== preferences.shortcutBindings
+    next.shortcutBindings !== preferences.shortcutBindings ||
+    next.integrationRules !== preferences.integrationRules
   if (activationChanged && next.onboardingCompleted && !hotkeyCaptureActive) {
     try {
       configureRecordingActivation(next)
@@ -1445,6 +1497,25 @@ function isVoiceCommandPreferences(
         'phrases' in entry &&
         Array.isArray(entry.phrases) &&
         entry.phrases.every((phrase: unknown) => typeof phrase === 'string')
+    )
+  )
+}
+
+function isIntegrationRules(value: unknown): value is AppPreferences['integrationRules'] {
+  return Boolean(
+    Array.isArray(value) &&
+    value.every(
+      (rule) =>
+        rule &&
+        typeof rule === 'object' &&
+        'id' in rule &&
+        typeof rule.id === 'string' &&
+        'match' in rule &&
+        typeof rule.match === 'string' &&
+        'enabled' in rule &&
+        typeof rule.enabled === 'boolean' &&
+        'blocked' in rule &&
+        typeof rule.blocked === 'boolean'
     )
   )
 }

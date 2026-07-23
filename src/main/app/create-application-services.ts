@@ -26,6 +26,8 @@ import { SelectedTextService } from '../../modules/selection/selected-text-servi
 import { VoiceCommandRegistry } from '../../modules/commands/voice-command-registry'
 import { createBuiltInVoiceCommands } from '../../modules/commands/built-in-commands'
 import { CommandUiBridge } from '../services/command-ui-bridge'
+import { IntegrationRegistry } from '../../modules/integrations/integration-registry'
+import { createBuiltInIntegrations } from '../../modules/integrations/built-in-integrations'
 
 export interface ApplicationServices {
   asrEngine: AsrEngine
@@ -40,6 +42,7 @@ export interface ApplicationServices {
   selectedText: SelectedTextService
   voiceCommands: VoiceCommandRegistry
   commandUi: CommandUiBridge
+  integrations: IntegrationRegistry
   recording: RecordingService
 }
 
@@ -87,6 +90,7 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
   const applicationActivator = new ActiveApplicationActivator()
   const selectedText = new SelectedTextService(clipboard, input)
   const commandUi = new CommandUiBridge()
+  const integrations = new IntegrationRegistry(createBuiltInIntegrations())
   const voiceCommands = new VoiceCommandRegistry(
     createBuiltInVoiceCommands({
       cancel: async () => undefined,
@@ -125,6 +129,7 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
     selectedText,
     voiceCommands,
     commandUi,
+    integrations,
     recording: new RecordingService(
       transcriptionProviders,
       asrEngine.id,

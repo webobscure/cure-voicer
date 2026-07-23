@@ -141,6 +141,7 @@ let preferences: AppPreferences = {
     'dictation.preset': 'CommandOrControl+Shift+P'
   },
   voiceCommands: {},
+  integrationRules: [],
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -399,6 +400,7 @@ const paneCopy: Record<string, [string, string]> = {
   editor: ['Редактор', 'Сравнение, ручная правка и локальная обработка'],
   commands: ['Голосовые команды', 'Фразы активации, включение и защита команд'],
   hotkeys: ['Горячие клавиши', 'Глобальные действия и проверка конфликтов'],
+  integrations: ['Интеграции', 'Правила вставки и обработки для приложений'],
   diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
 }
 

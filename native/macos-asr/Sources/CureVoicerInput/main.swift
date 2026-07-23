@@ -78,6 +78,7 @@ private struct ApplicationContext: Encodable {
     let applicationName: String?
     let applicationId: String?
     let processId: Int32?
+    let windowTitle: String?
     let isSecureField: Bool
 }
 
@@ -91,6 +92,7 @@ private func emitContext() throws {
         &focusedValue
     )
     var isSecureField = false
+    var windowTitle: String?
     if
         focusedResult == .success,
         let focusedValue,
@@ -106,10 +108,32 @@ private func emitContext() throws {
             isSecureField = (subroleValue as? String) == kAXSecureTextFieldSubrole
         }
     }
+    if let processId = application?.processIdentifier {
+        let applicationElement = AXUIElementCreateApplication(processId)
+        var windowValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(
+            applicationElement,
+            kAXFocusedWindowAttribute as CFString,
+            &windowValue
+        ) == .success,
+        let windowValue,
+        CFGetTypeID(windowValue) == AXUIElementGetTypeID() {
+            let window = unsafeDowncast(windowValue, to: AXUIElement.self)
+            var titleValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                window,
+                kAXTitleAttribute as CFString,
+                &titleValue
+            ) == .success {
+                windowTitle = titleValue as? String
+            }
+        }
+    }
     let context = ApplicationContext(
         applicationName: application?.localizedName,
         applicationId: application?.bundleIdentifier,
         processId: application?.processIdentifier,
+        windowTitle: windowTitle,
         isSecureField: isSecureField
     )
     let data = try JSONEncoder().encode(context)

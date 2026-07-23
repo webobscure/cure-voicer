@@ -20,3 +20,20 @@ export interface AppIntegration {
   ): Promise<string | null>
 }
 
+export interface AppIntegrationRule {
+  id: string
+  match: string
+  enabled: boolean
+  blocked: boolean
+  insertionMode?: InsertionMode
+  transformationPresetId?: string
+  shortcut?: string
+}
+
+export interface IntegrationResolution {
+  integrationId: string
+  strategy: InsertionStrategy
+  transformationPresetId: string | null
+  shortcut?: string
+  matchedRuleId?: string
+}

@@ -197,15 +197,21 @@ or disabled in settings.
 
 ## Stage 6 — active application integrations
 
-Status: **not started**
+Status: **completed on 2026-07-23**
 
-- [ ] Define `ActiveApplicationContext`, `AppIntegration` and integration registry.
-- [ ] Implement platform active-window adapters and secure-field capability.
-- [ ] Add generic browser, messenger, mail, IDE and text-editor integrations.
-- [ ] Add initial profiles for Telegram, Slack, Discord, Teams, Mail, Outlook,
+- [x] Define `ActiveApplicationContext`, `AppIntegration` and integration registry.
+- [x] Implement platform active-window adapters and secure-field capability.
+- [x] Add generic browser, messenger, mail, IDE and text-editor integrations.
+- [x] Add initial profiles for Telegram, Slack, Discord, Teams, Mail, Outlook,
       Gmail, Notion, Obsidian, VS Code and JetBrains.
-- [ ] Add per-app insertion, transformation, shortcut and blacklist rules.
-- [ ] Disable prose formatting by default in IDE/code contexts.
+- [x] Add per-app insertion, transformation, shortcut and blacklist rules.
+- [x] Disable prose formatting by default in IDE/code contexts.
+
+Specific profiles precede generic browser/editor matching. User rules can match a
+profile ID or literal application identity fragment and override insertion,
+transformation and contextual shortcut behavior. A blocked rule routes text to
+the internal editor instead of typing into the target. Secure fields remain a
+separate non-overridable insertion safety check.
 
 ## Stage 7 — product data and settings
 

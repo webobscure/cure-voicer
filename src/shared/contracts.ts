@@ -117,6 +117,7 @@ export interface AppPreferences {
   transformationPresetId: string
   shortcutBindings: Record<string, string>
   voiceCommands: Record<string, { enabled: boolean; phrases: string[] }>
+  integrationRules: import('./types/integrations').AppIntegrationRule[]
   keepRecordings: boolean
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion

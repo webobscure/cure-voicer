@@ -60,6 +60,10 @@
             <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M7 9h2M11 9h2M15 9h2M7 13h10"></path></svg>
             <span>Горячие клавиши</span>
           </button>
+          <button class="nav-item" type="button" data-nav="integrations">
+            <svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"></path><path d="M5 4h4v4H5zM15 4h4v4h-4zM5 16h4v4H5zM15 16h4v4h-4z"></path></svg>
+            <span>Интеграции</span>
+          </button>
           <button class="nav-item" type="button" data-nav="diagnostics">
             <svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path><circle cx="6" cy="15" r="1"></circle><circle cx="17" cy="6" r="1"></circle></svg>
             <span>Диагностика</span>
@@ -336,6 +340,13 @@
               <div><h2>Горячие клавиши</h2><p>Отдельные действия работают глобально в macOS и Windows</p></div>
             </div>
             <div id="hotkeysReactRoot"></div>
+          </section>
+          <section class="settings-pane" data-pane="integrations" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon indigo"><svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"></path><path d="M5 4h4v4H5zM15 4h4v4h-4zM5 16h4v4H5zM15 16h4v4h-4z"></path></svg></div>
+              <div><h2>Интеграции приложений</h2><p>Способ вставки и форматирование для активного приложения</p></div>
+            </div>
+            <div id="integrationsReactRoot"></div>
           </section>
         </div>
       </section>

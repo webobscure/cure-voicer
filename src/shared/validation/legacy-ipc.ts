@@ -62,6 +62,23 @@ export const legacyPreferencesPatchSchema = z
         phrases: z.array(z.string().trim().min(1).max(100)).max(20)
       })
     ),
+    integrationRules: z.array(
+      z.object({
+        id: z.string().trim().min(1).max(100),
+        match: z.string().trim().min(1).max(512),
+        enabled: z.boolean(),
+        blocked: z.boolean(),
+        insertionMode: z.enum([
+          'keyboard',
+          'accessibility',
+          'clipboard-safe',
+          'clipboard-only',
+          'internal-editor'
+        ]).optional(),
+        transformationPresetId: z.string().trim().min(1).max(100).optional(),
+        shortcut: z.string().trim().min(1).max(100).optional()
+      })
+    ).max(500),
     keepRecordings: z.boolean(),
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),

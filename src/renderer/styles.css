@@ -896,3 +896,15 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
   .command-setting-card { grid-template-columns: 1fr auto; }
   .command-setting-card textarea, .command-setting-card > input { grid-column: 1 / -1; grid-row: 2; }
 }
+.integration-settings, .integration-grid { display: grid; gap: 10px; }
+.integration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.integration-card { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding: 14px; border: .5px solid var(--separator); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
+.integration-card .command-setting-copy { grid-column: 1 / -1; }
+.integration-card select { min-width: 0; min-height: 34px; padding: 0 9px; border: .5px solid var(--separator); border-radius: 9px; color: var(--label); background: var(--control); }
+.integration-block { grid-column: 1 / -1; color: var(--secondary); font-size: 11px; }
+.custom-rule-form { display: flex; gap: 8px; margin-top: 6px; }
+.custom-rule-form input { min-height: 38px; flex: 1; padding: 0 11px; border: .5px solid var(--separator); border-radius: 11px; color: var(--label); background: var(--control); }
+.custom-rule-form button, .custom-rule-row button { border: 0; border-radius: 10px; padding: 0 13px; color: white; background: var(--accent); font-weight: 650; }
+.custom-rule-row { display: flex; min-height: 38px; align-items: center; justify-content: space-between; padding: 7px 10px 7px 14px; border-radius: 11px; background: var(--card); font-size: 11px; }
+.custom-rule-row button { min-height: 27px; color: #d13d31; background: rgba(255, 69, 58, .11); }
+@media (max-width: 900px) { .integration-grid { grid-template-columns: 1fr; } }
