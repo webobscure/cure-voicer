@@ -149,8 +149,9 @@ Exit criteria: default insertion does not modify the clipboard; clipboard fallba
 never overwrites newer user/third-party data.
 
 The macOS helper was compiled and its active-application JSON contract was
-exercised locally. Windows Unicode/UIPI capability is unit-tested and remains to
-be exercised on the Windows CI runner and with a real elevated target in stage 8.
+exercised locally. Windows Unicode/UIPI capability is unit-tested; the Windows
+native runtimes, Electron shell and packaged application are exercised by CI.
+A real elevated target still requires the manual release matrix in stage 8.
 The Punto tests simulate its observable clipboard mutation; a release candidate
 still requires the manual Punto matrix documented in `docs/testing.md`.
 
@@ -241,7 +242,7 @@ Status: **in progress**
 - [x] Add diagnostics page/report with redaction and service probes.
 - [x] Add user-data deletion and model/cache controls.
 - [x] Add IPC integration, Electron smoke and Playwright E2E suites.
-- [ ] Test packaged macOS/Windows builds and native runtime loading.
+- [x] Test packaged macOS/Windows builds and native runtime loading.
 - [ ] Configure macOS entitlements/signing/notarization and Windows signing.
 - [x] Add signed auto-update policy with staged rollout and rollback notes.
 - [x] Finish all extension and platform documentation.
@@ -256,12 +257,14 @@ dev-tool advisories remain isolated from packaged dependencies.
 The macOS arm64 `.app`, DMG and ZIP were built locally and the packaged app
 passed a separate smoke launch; both arm64 Swift helpers, usage descriptions and
 the generated branded ICNS were inspected in the bundle. Signing was skipped
-because no Developer ID identity is installed. The Windows workflow now runs E2E,
-loads both native runtimes, accepts optional Authenticode secrets, builds x64
-portable/NSIS artifacts and smoke-tests `win-unpacked`; those steps still require
-the next Windows runner execution before this stage can be closed. The signed
-update rollout/rollback policy is documented, while automatic installation stays
-disabled until signed-release verification tests exist.
+because no Developer ID identity is installed. Windows workflow run
+`30009747899` passed source checks, Electron E2E, native runtime loading, x64
+portable/NSIS packaging, packaged-app smoke launch, checksum generation and
+artifact upload. The workflow accepts optional Authenticode secrets. The signed
+update rollout/rollback policy is documented and enforced: update checks remain
+disabled when the installed application does not have a valid package signature.
+Actual macOS notarization and Windows Authenticode verification remain blocked
+on release credentials rather than source implementation.
 
 ## Validation required after every stage
 
