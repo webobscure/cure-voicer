@@ -2,7 +2,6 @@ import type {
   AsrStatus,
   AppPreferences,
   CureVoicerApi,
-  DictationHistoryItem,
   HoldKey,
   OverlayMotion,
   OverlayPlacement,
@@ -17,6 +16,7 @@ import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.pn
 import { AppearanceController } from './app/appearance'
 import { I18nStore } from './app/i18n/i18n-store'
 import { onboardingController } from './features/onboarding/onboarding-controller'
+import { settingsDataStore } from './app/settings-data-store'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
 const i18n = new I18nStore('system', navigator.language)
@@ -71,16 +71,6 @@ const smartCorrectionToggle = getElement<HTMLInputElement>('smartCorrectionToggl
 const smartCorrectionDetail = getElement('smartCorrectionDetail')
 const smartCorrectionStatusValue = getElement('smartCorrectionStatusValue')
 const smartCorrectionProgress = getElement<HTMLProgressElement>('smartCorrectionProgress')
-const vocabularyForm = getElement<HTMLFormElement>('vocabularyForm')
-const vocabularyInput = getElement<HTMLInputElement>('vocabularyInput')
-const vocabularyList = getElement('vocabularyList')
-const vocabularyCount = getElement('vocabularyCount')
-const vocabularyMessage = getElement('vocabularyMessage')
-const historyList = getElement('historyList')
-const historyEmpty = getElement('historyEmpty')
-const historyCount = getElement('historyCount')
-const clearHistoryButton = getElement<HTMLButtonElement>('clearHistoryButton')
-const latestResultCard = getElement('latestResultCard')
 const restartOnboardingButton = getElement<HTMLButtonElement>('restartOnboardingButton')
 
 if (miniBrandLogo) miniBrandLogo.src = brandLogoUrl
@@ -145,8 +135,6 @@ let asrStatus: AsrStatus = {
   modelName: 'Parakeet TDT 0.6B V3',
   modelSizeBytes: 0
 }
-let vocabulary: string[] = []
-let history: DictationHistoryItem[] = []
 const recorder = new AudioRecorder(updateLevel)
 const silenceDetector = new SilenceDetector(() => {
   if (state === 'recording') void finishRecording()
@@ -280,8 +268,7 @@ async function finishRecording(): Promise<void> {
     resultPath.textContent = `${deliveryLabel} · ${result.recordingPath}`
     if (api) {
       const info = await api.getAppInfo()
-      history = info.history
-      renderHistory()
+      settingsDataStore.update({ history: info.history })
     }
     await setState('idle')
     activeDictationSessionId = null
@@ -658,81 +645,6 @@ async function updatePreferences(patch: Partial<AppPreferences>): Promise<boolea
   }
 }
 
-function renderVocabulary(): void {
-  vocabularyCount.textContent = String(vocabulary.length)
-  vocabularyList.replaceChildren()
-
-  if (vocabulary.length === 0) {
-    const empty = document.createElement('div')
-    empty.className = 'list-empty-row'
-    empty.textContent = 'Добавьте первый термин — он будет применяться к результату распознавания.'
-    vocabularyList.append(empty)
-    return
-  }
-
-  for (const term of vocabulary) {
-    const row = document.createElement('div')
-    row.className = 'vocabulary-row'
-    const copy = document.createElement('div')
-    copy.className = 'setting-copy'
-    const strong = document.createElement('strong')
-    strong.textContent = term
-    const detail = document.createElement('span')
-    detail.textContent = 'Предпочтительное написание'
-    copy.append(strong, detail)
-    const remove = document.createElement('button')
-    remove.type = 'button'
-    remove.className = 'icon-button'
-    remove.dataset.removeTerm = term
-    remove.setAttribute('aria-label', `Удалить ${term}`)
-    remove.textContent = '×'
-    row.append(copy, remove)
-    vocabularyList.append(row)
-  }
-}
-
-function renderHistory(): void {
-  historyList.replaceChildren()
-  latestResultCard.hidden = true
-  historyEmpty.hidden = history.length > 0
-  clearHistoryButton.disabled = history.length === 0
-  historyCount.textContent = history.length
-    ? `${history.length} ${pluralize(history.length, ['диктовка', 'диктовки', 'диктовок'])}`
-    : 'Нет записей'
-
-  for (const item of history) {
-    const card = document.createElement('article')
-    card.className = 'history-entry'
-    const meta = document.createElement('div')
-    meta.className = 'history-entry-meta'
-    const date = document.createElement('span')
-    date.textContent = new Intl.DateTimeFormat('ru', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(new Date(item.createdAt))
-    const metrics = document.createElement('span')
-    metrics.textContent = `${formatDuration(item.durationMs)} · ${item.latencyMs} мс`
-    meta.append(date, metrics)
-    const text = document.createElement('p')
-    text.textContent = item.text
-    const actions = document.createElement('div')
-    actions.className = 'history-entry-actions'
-    const copy = document.createElement('button')
-    copy.type = 'button'
-    copy.dataset.copyHistory = item.id
-    copy.textContent = 'Копировать'
-    const remove = document.createElement('button')
-    remove.type = 'button'
-    remove.dataset.removeHistory = item.id
-    remove.textContent = 'Удалить'
-    actions.append(copy, remove)
-    card.append(meta, text, actions)
-    historyList.append(card)
-  }
-}
-
 async function populateMicrophones(): Promise<void> {
   if (!navigator.mediaDevices?.enumerateDevices) return
   try {
@@ -754,20 +666,6 @@ async function populateMicrophones(): Promise<void> {
   } catch (error) {
     console.warn('Could not enumerate microphones', error)
   }
-}
-
-function formatDuration(durationMs: number): string {
-  const seconds = Math.max(1, Math.round(durationMs / 1000))
-  return seconds < 60 ? `${seconds} сек` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function pluralize(value: number, forms: [string, string, string]): string {
-  const mod100 = value % 100
-  const mod10 = value % 10
-  if (mod100 >= 11 && mod100 <= 19) return forms[2]
-  if (mod10 === 1) return forms[0]
-  if (mod10 >= 2 && mod10 <= 4) return forms[1]
-  return forms[2]
 }
 
 function formatAccelerator(accelerator: string, platform: NodeJS.Platform): string {
@@ -1048,54 +946,6 @@ asrRetryButton.addEventListener('click', async () => {
     renderAsrStatus()
   }
 })
-vocabularyForm.addEventListener('submit', async (event) => {
-  event.preventDefault()
-  const term = vocabularyInput.value
-  if (!term.trim()) return
-  try {
-    vocabulary = api ? await api.addVocabularyTerm(term) : [...vocabulary, term.trim()]
-    vocabularyInput.value = ''
-    vocabularyMessage.textContent = 'Термин сохранён локально'
-    renderVocabulary()
-  } catch (error) {
-    vocabularyMessage.textContent = error instanceof Error ? error.message : String(error)
-  }
-})
-vocabularyList.addEventListener('click', async (event) => {
-  if (!(event.target instanceof Element)) return
-  const button = event.target.closest<HTMLButtonElement>('[data-remove-term]')
-  const term = button?.dataset.removeTerm
-  if (!term) return
-  vocabulary = api
-    ? await api.removeVocabularyTerm(term)
-    : vocabulary.filter((item) => item !== term)
-  renderVocabulary()
-})
-historyList.addEventListener('click', async (event) => {
-  if (!(event.target instanceof Element)) return
-  const target = event.target
-  const copyButton = target.closest<HTMLButtonElement>('[data-copy-history]')
-  const removeButton = target.closest<HTMLButtonElement>('[data-remove-history]')
-  if (copyButton) {
-    const item = history.find((entry) => entry.id === copyButton.dataset.copyHistory)
-    if (item) {
-      await api?.copyText(item.text)
-      copyButton.textContent = 'Скопировано'
-      window.setTimeout(() => (copyButton.textContent = 'Копировать'), 1_200)
-    }
-  } else if (removeButton?.dataset.removeHistory) {
-    history = api
-      ? await api.removeHistoryEntry(removeButton.dataset.removeHistory)
-      : history.filter((item) => item.id !== removeButton.dataset.removeHistory)
-    renderHistory()
-  }
-})
-clearHistoryButton.addEventListener('click', async () => {
-  if (!history.length || !window.confirm('Очистить всю локальную историю диктовок?')) return
-  await api?.clearHistory()
-  history = []
-  renderHistory()
-})
 navItems.forEach((item) => {
   item.addEventListener('click', () => selectPane(item.dataset.nav ?? 'general'))
 })
@@ -1139,11 +989,8 @@ if (api) {
     preferences = info.preferences
     smartCorrectionStatus = info.smartCorrection
     asrStatus = info.asrStatus
-    vocabulary = info.vocabulary
-    history = info.history
+    settingsDataStore.update({ vocabulary: info.vocabulary, history: info.history })
     renderPreferences()
-    renderVocabulary()
-    renderHistory()
     renderOverlayPlacement(info.overlayPlacement)
     onboardingController.update({
       platform: appPlatform,
@@ -1159,8 +1006,7 @@ if (api) {
 } else {
   document.body.dataset.platform = 'darwin'
   renderPreferences()
-  renderVocabulary()
-  renderHistory()
+  settingsDataStore.update({ vocabulary: [], history: [] })
   renderOverlayPlacement({ mode: 'bottom-center' })
 }
 

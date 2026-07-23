@@ -238,7 +238,10 @@ optional global insertion shortcuts.
 The onboarding flow is now a React feature backed by a framework-independent
 controller. It no longer mutates a parallel tree of imperative DOM elements.
 The shared typed localization store currently covers the complete onboarding
-flow and is the migration path for the remaining settings surfaces. Explicit
+flow, vocabulary and history, and is the migration path for the remaining
+settings surfaces. Vocabulary and history now use React pages backed by a shared
+external data store, so dictation results can update them without DOM mutation.
+Explicit
 light/dark preferences override the OS correctly, while the system preference
 tracks live color-scheme changes.
 

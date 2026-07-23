@@ -34,6 +34,12 @@ export interface DesktopClient {
   setDefaultTransformationPreset(presetId: string): Promise<void>
   insertEditorText(text: string): Promise<InsertionResult>
   getPreferences(): Promise<AppInfo['preferences']>
+  getVocabulary(): Promise<string[]>
+  addVocabularyTerm(term: string): Promise<string[]>
+  removeVocabularyTerm(term: string): Promise<string[]>
+  getHistory(): Promise<AppInfo['history']>
+  removeHistoryEntry(id: string): Promise<AppInfo['history']>
+  clearHistory(): Promise<void>
   updatePreferences(patch: Partial<AppInfo['preferences']>): Promise<AppInfo['preferences']>
   getTemplates(): Promise<TextTemplate[]>
   getClipboardHistory(): Promise<ClipboardHistoryItem[]>
@@ -103,6 +109,30 @@ export class ElectronDesktopClient implements DesktopClient {
 
   async getPreferences(): Promise<AppInfo['preferences']> {
     return (await this.api.getAppInfo()).preferences
+  }
+
+  async getVocabulary(): Promise<string[]> {
+    return (await this.api.getAppInfo()).vocabulary
+  }
+
+  addVocabularyTerm(term: string): Promise<string[]> {
+    return this.api.addVocabularyTerm(term)
+  }
+
+  removeVocabularyTerm(term: string): Promise<string[]> {
+    return this.api.removeVocabularyTerm(term)
+  }
+
+  async getHistory(): Promise<AppInfo['history']> {
+    return (await this.api.getAppInfo()).history
+  }
+
+  removeHistoryEntry(id: string): Promise<AppInfo['history']> {
+    return this.api.removeHistoryEntry(id)
+  }
+
+  clearHistory(): Promise<void> {
+    return this.api.clearHistory()
   }
 
   updatePreferences(

@@ -295,30 +295,12 @@
               <div class="empty-pane-icon purple"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h6"></path></svg></div>
               <div><h2>Персональный словарь</h2><p>Задайте правильное написание имён, продуктов и терминов</p></div>
             </div>
-            <form class="vocabulary-form" id="vocabularyForm">
-              <input id="vocabularyInput" maxlength="80" autocomplete="off" placeholder="Например, Cure Voicer или Parakeet" />
-              <button type="submit">Добавить</button>
-            </form>
-            <div class="inline-message" id="vocabularyMessage" role="status"></div>
-            <div class="group-label vocabulary-label">Сохранённые термины <span id="vocabularyCount">0</span></div>
-            <div class="vocabulary-list settings-group" id="vocabularyList"></div>
+            <div id="vocabularyReactRoot"></div>
           </section>
 
           <section class="settings-pane" data-pane="history" hidden>
-            <div class="history-toolbar">
-              <div><strong>Локальная история</strong><span id="historyCount">Нет записей</span></div>
-              <button class="danger-button" id="clearHistoryButton" type="button">Очистить</button>
-            </div>
-            <div class="history-list" id="historyList"></div>
-            <div class="history-empty" id="historyEmpty">
-              <div class="empty-pane-icon blue"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg></div>
-              <h2>История пока пуста</h2>
-              <p>Здесь появятся последние диктовки. Всё хранится только на этом компьютере.</p>
-            </div>
-            <div class="history-card latest-result" id="latestResultCard" hidden>
-              <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><path d="M7 10v4M10.5 7v10M14 9v6M17.5 5v14"></path></svg></div>
-              <div><p id="resultText">Здесь появится распознанный текст.</p><span id="resultPath"></span></div>
-            </div>
+            <div id="historyReactRoot"></div>
+            <div hidden><p id="resultText"></p><span id="resultPath"></span></div>
           </section>
 
           <section class="settings-pane" data-pane="diagnostics" hidden>

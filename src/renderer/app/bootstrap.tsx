@@ -15,6 +15,9 @@ import { OnboardingPage } from '../features/onboarding/OnboardingPage'
 import { onboardingController } from '../features/onboarding/onboarding-controller'
 import brandLogoUrl from '../../../assets/branding/cure-voicer-liquid-glass-logo.png'
 import type { AppPreferences } from '../../shared/contracts'
+import { VocabularyPage } from '../features/vocabulary/VocabularyPage'
+import { HistoryPage } from '../features/history/HistoryPage'
+import { settingsDataStore } from './settings-data-store'
 
 let diagnosticsRoot: Root | null = null
 let editorRoot: Root | null = null
@@ -24,6 +27,8 @@ let integrationsRoot: Root | null = null
 let templatesRoot: Root | null = null
 let clipboardRoot: Root | null = null
 let onboardingRoot: Root | null = null
+let vocabularyRoot: Root | null = null
+let historyRoot: Root | null = null
 
 export function mountReactFeatures(
   api: CureVoicerApi | undefined,
@@ -38,7 +43,9 @@ export function mountReactFeatures(
   const templatesContainer = document.getElementById('templatesReactRoot')
   const clipboardContainer = document.getElementById('clipboardReactRoot')
   const onboardingContainer = document.getElementById('onboardingReactRoot')
-  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot) return
+  const vocabularyContainer = document.getElementById('vocabularyReactRoot')
+  const historyContainer = document.getElementById('historyReactRoot')
+  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer && !onboardingContainer && !vocabularyContainer && !historyContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot || onboardingRoot || vocabularyRoot || historyRoot) return
 
   if (onboardingContainer) {
     onboardingRoot = createRoot(onboardingContainer)
@@ -55,6 +62,8 @@ export function mountReactFeatures(
     if (integrationsContainer) integrationsContainer.textContent = 'Интеграции доступны только в приложении.'
     if (templatesContainer) templatesContainer.textContent = 'Шаблоны доступны только в приложении.'
     if (clipboardContainer) clipboardContainer.textContent = 'Буфер доступен только в приложении.'
+    if (vocabularyContainer) vocabularyContainer.textContent = 'Vocabulary is available only in the desktop application.'
+    if (historyContainer) historyContainer.textContent = 'History is available only in the desktop application.'
     return
   }
 
@@ -86,5 +95,13 @@ export function mountReactFeatures(
   if (clipboardContainer) {
     clipboardRoot = createRoot(clipboardContainer)
     clipboardRoot.render(<StrictMode><I18nProvider store={i18n}><ClipboardSettingsPage client={client} /></I18nProvider></StrictMode>)
+  }
+  if (vocabularyContainer) {
+    vocabularyRoot = createRoot(vocabularyContainer)
+    vocabularyRoot.render(<StrictMode><I18nProvider store={i18n}><VocabularyPage client={client} store={settingsDataStore} /></I18nProvider></StrictMode>)
+  }
+  if (historyContainer) {
+    historyRoot = createRoot(historyContainer)
+    historyRoot.render(<StrictMode><I18nProvider store={i18n}><HistoryPage client={client} store={settingsDataStore} /></I18nProvider></StrictMode>)
   }
 }

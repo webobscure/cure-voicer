@@ -41,6 +41,19 @@ test('launches hardened settings UI and exposes only the typed preload surface',
     await page.getByRole('button', { name: 'Диагностика' }).click()
     await expect(page.getByText('Защищённое хранилище')).toBeVisible()
     await expect(page.getByText('Диагностика не включает распознанный текст')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Словарь' }).click()
+    await expect(page.locator('#vocabularyReactRoot input')).toBeVisible()
+    await page.getByRole('button', { name: 'История' }).click()
+    await expect(page.locator('#historyReactRoot .history-empty')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Буфер и данные' }).click()
+    const preferenceSelects = page.locator('#clipboardReactRoot select')
+    await preferenceSelects.nth(1).selectOption('dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await preferenceSelects.nth(2).selectOption('en')
+    await page.getByRole('button', { name: 'История' }).click()
+    await expect(page.getByText('History is empty')).toBeVisible()
   } finally {
     await application.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
     await application.close().catch(() => undefined)
