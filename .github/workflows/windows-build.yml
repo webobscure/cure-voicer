@@ -57,8 +57,8 @@ jobs:
           New-Item -ItemType Directory -Path $profile -Force | Out-Null
           $env:CURE_VOICER_SMOKE_TEST = '1'
           $env:CURE_VOICER_SMOKE_USER_DATA = $profile
-          & 'release/win-unpacked/Cure Voicer.exe'
-          if ($LASTEXITCODE -ne 0) { throw "Packaged smoke test failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath 'release/win-unpacked/Cure Voicer.exe' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged smoke test failed: $($process.ExitCode)" }
 
       - name: Generate SHA-256 checksums
         shell: pwsh
