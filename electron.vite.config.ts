@@ -1,4 +1,5 @@
 import { defineConfig } from 'electron-vite'
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
@@ -17,6 +18,10 @@ export default defineConfig({
     // CommonJS even though the main process uses native ESM.
     build: {
       rollupOptions: {
+        input: {
+          index: 'src/preload/index.ts',
+          overlay: 'src/preload/overlay.ts'
+        },
         output: {
           format: 'cjs',
           entryFileNames: '[name].js'
@@ -25,6 +30,7 @@ export default defineConfig({
     }
   },
   renderer: {
+    plugins: [react()],
     build: {
       rollupOptions: {
         input: ['src/renderer/index.html', 'src/renderer/overlay.html']

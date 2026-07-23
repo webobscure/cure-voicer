@@ -1,5 +1,6 @@
 export const IPC = {
   getAppInfo: 'app:get-info',
+  getOverlayInfo: 'overlay:get-info',
   setRecordingState: 'recording:set-state',
   setAudioLevel: 'recording:set-audio-level',
   finishRecording: 'recording:finish',
@@ -135,6 +136,10 @@ export interface AppInfo {
   asrStatus: AsrStatus
 }
 
+export interface OverlayInfo {
+  preferences: AppPreferences
+}
+
 export interface PcmRecordingPayload {
   samples: Uint8Array
   sampleRate: 16000
@@ -181,4 +186,14 @@ export interface CureVoicerApi {
     callback: (status: SmartCorrectionStatus) => void
   ): () => void
   onAsrStatusChanged(callback: (status: AsrStatus) => void): () => void
+}
+
+export interface CureVoicerOverlayApi {
+  getOverlayInfo(): Promise<OverlayInfo>
+  beginOverlayDrag(): void
+  endOverlayDrag(): void
+  showOverlayMenu(): void
+  onOverlayState(callback: (state: RecordingState) => void): () => void
+  onOverlayAudioLevel(callback: (level: number) => void): () => void
+  onOverlayPreferencesChanged(callback: (preferences: AppPreferences) => void): () => void
 }

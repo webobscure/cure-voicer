@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws:"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./styles.css" />
@@ -47,6 +47,10 @@
           <button class="nav-item" type="button" data-nav="history">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>
             <span>История</span>
+          </button>
+          <button class="nav-item" type="button" data-nav="diagnostics">
+            <svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path><circle cx="6" cy="15" r="1"></circle><circle cx="17" cy="6" r="1"></circle></svg>
+            <span>Диагностика</span>
           </button>
         </nav>
 
@@ -270,6 +274,14 @@
               <div class="setting-symbol blue"><svg viewBox="0 0 24 24"><path d="M7 10v4M10.5 7v10M14 9v6M17.5 5v14"></path></svg></div>
               <div><p id="resultText">Здесь появится распознанный текст.</p><span id="resultPath"></span></div>
             </div>
+          </section>
+
+          <section class="settings-pane" data-pane="diagnostics" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon blue"><svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path></svg></div>
+              <div><h2>Диагностика</h2><p>Обезличенное состояние приложения и системных возможностей</p></div>
+            </div>
+            <div id="diagnosticsReactRoot" class="react-diagnostics-root"></div>
           </section>
         </div>
       </section>

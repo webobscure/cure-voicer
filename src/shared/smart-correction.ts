@@ -121,5 +121,5 @@ export function sanitizeModelCorrection(output: string, original: string): strin
 }
 
 function cleanPromptValue(value: string): string {
-  return value.replace(/\u0000/g, '').trim()
+  return value.split('\0').join('').trim()
 }

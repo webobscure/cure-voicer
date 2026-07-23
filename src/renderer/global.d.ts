@@ -1,8 +1,9 @@
-import type { CureVoicerApi } from '../shared/contracts'
+import type { CureVoicerApi, CureVoicerOverlayApi } from '../shared/contracts'
 
 declare global {
   interface Window {
     cureVoicer: CureVoicerApi
+    cureVoicerOverlay: CureVoicerOverlayApi
   }
 }
 

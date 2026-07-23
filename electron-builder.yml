@@ -48,4 +48,18 @@ nsis:
 portable:
   artifactName: Cure-Voicer-${version}-windows-${arch}-portable.${ext}
 
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  artifactName: Cure-Voicer-${version}-macos-${arch}.${ext}
+  extraResources:
+    - from: native/macos-asr/.build/release/cure-voicer-asr
+      to: bin/cure-voicer-asr
+
 publish: null

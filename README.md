@@ -20,7 +20,14 @@ The application currently provides:
 Audio and transcription stay on the device. The platform-specific runtime downloads
 the Parakeet model once on the first run and keeps it in its local model cache.
 
-## Development
+## Development prerequisites
+
+- Node.js 24;
+- npm;
+- Xcode 16 / Swift 6 on macOS when building the FluidAudio helper;
+- Windows 11 x64 for producing and validating Windows installers.
+
+## Install and run
 
 ```bash
 npm install
@@ -28,16 +35,48 @@ npm run build:macos-asr
 npm run dev
 ```
 
-Run all non-interactive checks:
+Windows development does not use the Swift build step:
+
+```bash
+npm install
+npm run dev
+```
+
+## Quality checks
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run test:smoke
+```
+
+Run all non-GUI checks:
 
 ```bash
 npm run check
+```
+
+## Packaging
+
+Build an unsigned macOS Apple Silicon DMG and ZIP:
+
+```bash
+npm run pack:mac
 ```
 
 Build Windows x64 portable and NSIS packages on Windows:
 
 ```bash
 npm run pack:win
+```
+
+Build Windows artifacts separately when needed:
+
+```bash
+npm run pack:win:portable
+npm run pack:win:nsis
 ```
 
 The same build is available through the `Windows x64 beta` GitHub Actions
@@ -67,6 +106,15 @@ hide the orb until the next dictation hotkey, or quit Cure Voicer.
 - `src/renderer` — Liquid-style settings, the transparent voice overlay, and Web Audio capture.
 - `src/shared` — cross-process contracts.
 - `tests` — audio pipeline unit tests.
+
+The application is being migrated incrementally to domain modules, React views,
+runtime-validated IPC and provider-based insertion. See:
+
+- [current-state audit](docs/current-state-audit.md);
+- [rewrite plan](docs/rewrite-plan.md);
+- [architecture](docs/architecture.md);
+- [security](docs/security.md);
+- [testing](docs/testing.md).
 
 ASR adapters:
 

@@ -682,6 +682,19 @@ kbd {
 .history-empty p { max-width: 370px; margin: 7px auto 0; color: var(--secondary); font-size: 10px; line-height: 1.5; }
 .latest-result { margin-top: 10px; }
 
+.react-diagnostics-root { margin-top: 18px; }
+.react-diagnostics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.react-diagnostic-card { display: flex; min-height: 64px; align-items: center; gap: 11px; padding: 12px 14px; border: 0.5px solid rgba(60, 60, 67, 0.1); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); }
+.react-diagnostic-card i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
+.react-diagnostic-card i.is-ok { background: #34c759; box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.12); }
+.react-diagnostic-card i.is-warning { background: #ff9f0a; box-shadow: 0 0 0 3px rgba(255, 159, 10, 0.12); }
+.react-diagnostic-card span, .react-diagnostic-card strong { display: block; }
+.react-diagnostic-card span { color: var(--secondary); font-size: 9px; }
+.react-diagnostic-card strong { overflow: hidden; margin-top: 4px; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.react-diagnostics-note { grid-column: 1 / -1; margin: 7px 3px 0; color: var(--tertiary); font-size: 9px; line-height: 1.45; }
+.react-diagnostics-message { padding: 26px; border-radius: 14px; color: var(--secondary); background: var(--card); text-align: center; }
+.react-diagnostics-message.is-error { color: #ff453a; }
+
 body[data-state='recording'] .mini-orb { animation: orb-pulse 1.6s ease-in-out infinite; }
 body[data-state='recording'] .level-meter span { background: #ff453a; }
 

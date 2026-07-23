@@ -17,7 +17,7 @@ import {
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { uIOhook, UiohookKey, type UiohookKeyboardEvent } from 'uiohook-napi'
 import type {
   AppInfo,
@@ -31,12 +31,35 @@ import type {
   RecordingState
 } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
-import { createAsrEngine } from './asr/create-engine'
-import { RecordingService } from './recording-service'
 import { isTextInsertionInProgress } from './text-inserter'
-import { SmartCorrectionService } from './smart-correction-service'
+import { createApplicationServices } from './app/create-application-services'
+import type { RecordingService } from './recording-service'
+import { registerApplicationLifecycle } from './app/application-lifecycle'
+import { hardenWindow, RendererPolicy } from './security/renderer-policy'
+import {
+  audioLevelSchema,
+  booleanValueSchema,
+  copyTextSchema,
+  historyIdSchema,
+  legacyPreferencesPatchSchema,
+  overlayPlacementModeSchema,
+  pcmRecordingPayloadSchema,
+  permissionSettingsKindSchema,
+  recordingStateSchema,
+  vocabularyTermSchema
+} from '../shared/validation/legacy-ipc'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
+const smokeTestMode = process.env.CURE_VOICER_SMOKE_TEST === '1'
+const smokeTestUserData = process.env.CURE_VOICER_SMOKE_USER_DATA
+if (smokeTestMode && smokeTestUserData && path.isAbsolute(smokeTestUserData)) {
+  app.setPath('userData', smokeTestUserData)
+}
+const rendererPolicy = new RendererPolicy({
+  rendererDirectory: path.join(currentDirectory, '../renderer'),
+  allowedFiles: ['index.html', 'overlay.html'],
+  developmentUrl: process.env.ELECTRON_RENDERER_URL
+})
 const defaultAccelerator = 'CommandOrControl+Shift+Space'
 const defaultHoldKey: HoldKey =
   process.platform === 'darwin' ? 'right-option' : 'right-control'
@@ -44,15 +67,9 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 // Dictation starts from a global key while the settings window is hidden, so
 // Chromium must allow the recorder's AudioContext without a renderer click.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-const asrEngine = createAsrEngine({
-  windowsWorkerPath: path.join(currentDirectory, 'windows-asr-worker.js'),
-  windowsModelsDirectory: path.join(app.getPath('userData'), 'models', 'parakeet-v3-onnx')
-})
-const smartCorrectionService = new SmartCorrectionService(
-  path.join(currentDirectory, 'llm-worker.js'),
-  path.join(app.getPath('userData'), 'models', 'smart-correction')
-)
-const recordingService = new RecordingService(asrEngine, smartCorrectionService)
+const applicationServices = createApplicationServices(currentDirectory)
+const { asrEngine, recording: recordingService, smartCorrection: smartCorrectionService } =
+  applicationServices
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -137,6 +154,8 @@ function createWindow(): BrowserWindow {
     if (mainWindow === window) mainWindow = null
   })
 
+  hardenWindow(window, rendererPolicy)
+
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
@@ -164,7 +183,7 @@ function createOverlayWindow(): BrowserWindow {
     hasShadow: false,
     backgroundColor: '#00000000',
     webPreferences: {
-      preload: path.join(currentDirectory, '../preload/index.js'),
+      preload: path.join(currentDirectory, '../preload/overlay.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -176,6 +195,8 @@ function createOverlayWindow(): BrowserWindow {
   if (process.platform === 'darwin') {
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   }
+
+  hardenWindow(window, rendererPolicy)
 
   window.webContents.once('did-finish-load', () => {
     window.webContents.send(IPC.overlayState, currentState)
@@ -269,7 +290,7 @@ function rebuildTrayMenu(appTray = tray): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.getAppInfo, (event): AppInfo => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     return {
       version: app.getVersion(),
       platform: process.platform,
@@ -286,31 +307,35 @@ function registerIpc(): void {
     }
   })
 
+  ipcMain.handle(IPC.getOverlayInfo, (event) => {
+    assertOverlaySender(event)
+    return { preferences }
+  })
+
   ipcMain.handle(IPC.setRecordingState, (event, state: RecordingState) => {
-    assertTrustedSender(event)
-    if (!isRecordingState(state)) throw new Error('Invalid recording state')
-    currentState = state
+    assertSettingsSender(event)
+    currentState = recordingStateSchema.parse(state)
     rebuildTrayMenu()
-    updateOverlayState(state)
+    updateOverlayState(currentState)
   })
 
   ipcMain.on(IPC.setAudioLevel, (event, level: number) => {
-    assertTrustedSender(event)
-    if (!Number.isFinite(level)) return
+    assertSettingsSender(event)
+    const validatedLevel = audioLevelSchema.parse(level)
     overlayWindow?.webContents.send(
       IPC.overlayAudioLevel,
-      Math.max(0, Math.min(1, level))
+      validatedLevel
     )
   })
 
   ipcMain.handle(
     IPC.finishRecording,
     async (event, payload: PcmRecordingPayload) => {
-      assertTrustedSender(event)
-      validateRecordingPayload(payload)
+      assertSettingsSender(event)
+      const validatedPayload = pcmRecordingPayloadSchema.parse(payload)
       if (activeRecordingFinish) return activeRecordingFinish
 
-      activeRecordingFinish = recordingService.finish(payload, {
+      activeRecordingFinish = recordingService.finish(validatedPayload, {
         autoPaste: preferences.autoPaste,
         keepRecording: preferences.keepRecordings,
         preferredTerms: vocabulary,
@@ -324,7 +349,7 @@ function registerIpc(): void {
               id: randomUUID(),
               createdAt: new Date().toISOString(),
               text: result.transcript,
-              durationMs: payload.durationMs,
+              durationMs: validatedPayload.durationMs,
               latencyMs: result.latencyMs,
               insertion: result.insertion
             },
@@ -342,9 +367,9 @@ function registerIpc(): void {
   ipcMain.handle(
     IPC.setOverlayPlacement,
     async (event, mode: OverlayPlacementMode) => {
-      assertTrustedSender(event)
-      if (!isPresetPlacement(mode)) throw new Error('Invalid overlay placement')
-      overlayPlacement = { mode }
+      assertSettingsSender(event)
+      const validatedMode = overlayPlacementModeSchema.parse(mode)
+      overlayPlacement = { mode: validatedMode }
       await saveOverlayPlacement()
       positionOverlay()
       mainWindow?.webContents.send(IPC.overlayPlacementChanged, overlayPlacement)
@@ -355,8 +380,8 @@ function registerIpc(): void {
   ipcMain.handle(
     IPC.updatePreferences,
     async (event, patch: Partial<AppPreferences>) => {
-      assertTrustedSender(event)
-      preferences = await applyPreferencePatch(patch)
+      assertSettingsSender(event)
+      preferences = await applyPreferencePatch(legacyPreferencesPatchSchema.parse(patch))
       await saveAppState()
       overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
       updateOverlayState(currentState)
@@ -365,30 +390,28 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.requestGlobalInputAccess, (event) => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     if (process.platform !== 'darwin') return true
     systemPreferences.isTrustedAccessibilityClient(true)
     return isGlobalInputAvailable()
   })
 
   ipcMain.handle(IPC.openSystemSettings, async (event, kind: unknown) => {
-    assertTrustedSender(event)
-    if (kind !== 'microphone' && kind !== 'accessibility') {
-      throw new Error('Invalid permission settings kind')
-    }
+    assertSettingsSender(event)
+    const validatedKind = permissionSettingsKindSchema.parse(kind)
     const target =
       process.platform === 'darwin'
-        ? kind === 'microphone'
+        ? validatedKind === 'microphone'
           ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
           : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
-        : kind === 'microphone'
+        : validatedKind === 'microphone'
           ? 'ms-settings:privacy-microphone'
           : 'ms-settings:easeofaccess'
     await shell.openExternal(target)
   })
 
   ipcMain.handle(IPC.completeOnboarding, async (event) => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     preferences = { ...preferences, onboardingCompleted: true }
     await saveAppState()
     try {
@@ -403,15 +426,14 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.setHotkeyCapture, (event, active: boolean) => {
-    assertTrustedSender(event)
-    if (typeof active !== 'boolean') throw new Error('Invalid capture state')
-    setHotkeyCapture(active)
+    assertSettingsSender(event)
+    setHotkeyCapture(booleanValueSchema.parse(active))
     return isGlobalInputAvailable()
   })
 
   ipcMain.handle(IPC.addVocabularyTerm, async (event, rawTerm: string) => {
-    assertTrustedSender(event)
-    const term = sanitizeVocabularyTerm(rawTerm)
+    assertSettingsSender(event)
+    const term = sanitizeVocabularyTerm(vocabularyTermSchema.parse(rawTerm))
     if (!vocabulary.some((item) => item.localeCompare(term, undefined, { sensitivity: 'accent' }) === 0)) {
       vocabulary = [...vocabulary, term].sort((left, right) => left.localeCompare(right))
       await saveAppState()
@@ -420,54 +442,55 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.removeVocabularyTerm, async (event, rawTerm: string) => {
-    assertTrustedSender(event)
-    vocabulary = vocabulary.filter((term) => term !== rawTerm)
+    assertSettingsSender(event)
+    const term = vocabularyTermSchema.parse(rawTerm)
+    vocabulary = vocabulary.filter((item) => item !== term)
     await saveAppState()
     return vocabulary
   })
 
   ipcMain.handle(IPC.removeHistoryEntry, async (event, id: string) => {
-    assertTrustedSender(event)
-    history = history.filter((item) => item.id !== id)
+    assertSettingsSender(event)
+    const validatedId = historyIdSchema.parse(id)
+    history = history.filter((item) => item.id !== validatedId)
     await saveAppState()
     return history
   })
 
   ipcMain.handle(IPC.clearHistory, async (event) => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     history = []
     await saveAppState()
   })
 
   ipcMain.handle(IPC.copyText, (event, text: string) => {
-    assertTrustedSender(event)
-    if (typeof text !== 'string' || text.length > 100_000) throw new Error('Invalid text')
-    clipboard.writeText(text)
+    assertSettingsSender(event)
+    clipboard.writeText(copyTextSchema.parse(text))
   })
 
   ipcMain.handle(IPC.prepareAsr, async (event) => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     await asrEngine.prepare?.()
     return asrEngine.status
   })
 
   ipcMain.handle(IPC.prepareSmartCorrection, async (event) => {
-    assertTrustedSender(event)
+    assertSettingsSender(event)
     return smartCorrectionService.prepare()
   })
 
   ipcMain.on(IPC.beginOverlayDrag, (event) => {
-    assertTrustedSender(event)
+    assertOverlaySender(event)
     beginOverlayDrag()
   })
 
   ipcMain.on(IPC.endOverlayDrag, (event) => {
-    assertTrustedSender(event)
+    assertOverlaySender(event)
     endOverlayDrag()
   })
 
   ipcMain.on(IPC.showOverlayMenu, (event) => {
-    assertTrustedSender(event)
+    assertOverlaySender(event)
     showOverlayContextMenu()
   })
 }
@@ -479,37 +502,30 @@ function assertTrustedSender(event: IpcMainInvokeEvent | IpcMainEvent): void {
   }
 }
 
+function assertSettingsSender(event: IpcMainInvokeEvent | IpcMainEvent): void {
+  assertRendererRole(event, 'settings')
+}
+
+function assertOverlaySender(event: IpcMainInvokeEvent | IpcMainEvent): void {
+  assertRendererRole(event, 'overlay')
+}
+
+function assertRendererRole(
+  event: IpcMainInvokeEvent | IpcMainEvent,
+  role: 'settings' | 'overlay'
+): void {
+  assertTrustedSender(event)
+  const senderUrl = new URL(event.senderFrame?.url ?? '')
+  const expectedPath = role === 'settings' ? '/index.html' : '/overlay.html'
+  const matchesDevelopmentSettings =
+    role === 'settings' && Boolean(process.env.ELECTRON_RENDERER_URL) && senderUrl.pathname === '/'
+  if (!senderUrl.pathname.endsWith(expectedPath) && !matchesDevelopmentSettings) {
+    throw new Error(`Rejected ${role} capability from another renderer`)
+  }
+}
+
 function isTrustedRendererUrl(url: string): boolean {
-  if (process.env.ELECTRON_RENDERER_URL) {
-    return new URL(url).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-  }
-
-  const rendererUrl = pathToFileURL(
-    path.join(currentDirectory, '../renderer/index.html')
-  ).toString()
-  const overlayUrl = pathToFileURL(
-    path.join(currentDirectory, '../renderer/overlay.html')
-  ).toString()
-  return url === rendererUrl || url === overlayUrl
-}
-
-function isRecordingState(value: unknown): value is RecordingState {
-  return ['idle', 'starting', 'recording', 'transcribing', 'error'].includes(
-    String(value)
-  )
-}
-
-function validateRecordingPayload(payload: PcmRecordingPayload): void {
-  const maxRecordingBytes = 16_000 * Float32Array.BYTES_PER_ELEMENT * 60 * 15
-  if (
-    !payload ||
-    !(payload.samples instanceof Uint8Array) ||
-    payload.samples.byteLength === 0 ||
-    payload.samples.byteLength > maxRecordingBytes ||
-    payload.sampleRate !== 16_000
-  ) {
-    throw new Error('Invalid PCM recording payload')
-  }
+  return rendererPolicy.isTrustedUrl(url)
 }
 
 function requestRecordingToggle(): void {
@@ -1023,83 +1039,101 @@ function disposeApplicationResources(): void {
 
 if (!hasSingleInstanceLock) app.quit()
 
-app.whenReady().then(async () => {
-  if (!hasSingleInstanceLock) return
-  if (process.platform === 'win32') app.setAppUserModelId('com.curevoicer.desktop')
-  if (process.platform === 'darwin') app.dock?.hide()
-  await loadAppState()
+registerApplicationLifecycle({
+  start: async () => {
+    if (!hasSingleInstanceLock) return
+    if (process.platform === 'win32') app.setAppUserModelId('com.curevoicer.desktop')
+    if (process.platform === 'darwin') app.dock?.hide()
+    await loadAppState()
 
-  session.defaultSession.setPermissionRequestHandler(
-    (webContents, permission, callback, details) => {
-      if (permission !== 'media' || !('mediaTypes' in details)) {
-        callback(false)
-        return
+    session.defaultSession.setPermissionRequestHandler(
+      (webContents, permission, callback, details) => {
+        if (permission !== 'media' || !('mediaTypes' in details)) {
+          callback(false)
+          return
+        }
+
+        const mediaTypes = details.mediaTypes ?? []
+        const isAudioOnly = mediaTypes.every((type) => type === 'audio')
+        callback(
+          isAudioOnly && isTrustedRendererUrl(webContents.getURL())
+        )
       }
+    )
 
-      const mediaTypes = details.mediaTypes ?? []
-      const isAudioOnly = mediaTypes.length === 0 || mediaTypes.every((type) => type === 'audio')
-      callback(
-        isAudioOnly && isTrustedRendererUrl(webContents.getURL())
-      )
-    }
-  )
-
-  registerIpc()
-  smartCorrectionService.onStatusChanged((status) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send(IPC.smartCorrectionStatusChanged, status)
-  })
-  asrEngine.onStatusChanged?.((status) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send(IPC.asrStatusChanged, status)
-  })
-  await smartCorrectionService.refreshStatus()
-  await asrEngine.refreshStatus?.()
-  mainWindow = createWindow()
-  if (!preferences.onboardingCompleted) {
-    const onboardingWindow = mainWindow
-    onboardingWindow.once('ready-to-show', () => {
-      if (onboardingWindow.isDestroyed()) return
-      onboardingWindow.show()
-      onboardingWindow.focus()
+    registerIpc()
+    smartCorrectionService.onStatusChanged((status) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      mainWindow.webContents.send(IPC.smartCorrectionStatusChanged, status)
     })
-  }
-  overlayWindow = createOverlayWindow()
-  tray = createTray()
-
-  void asrEngine.prepare?.().catch((error) => {
-    console.error('Could not prepare local ASR engine', error)
-  })
-  if (preferences.smartCorrectionEnabled) {
-    void smartCorrectionService.prepare().catch((error) => {
-      console.warn('Could not prepare smart correction', error)
+    asrEngine.onStatusChanged?.((status) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      mainWindow.webContents.send(IPC.asrStatusChanged, status)
     })
-  }
-
-  if (preferences.onboardingCompleted) {
-    try {
-      configureRecordingActivation(preferences)
-    } catch (error) {
-      console.warn('Could not configure recording activation', error)
+    await smartCorrectionService.refreshStatus()
+    await asrEngine.refreshStatus?.()
+    mainWindow = createWindow()
+    if (!preferences.onboardingCompleted) {
+      const onboardingWindow = mainWindow
+      onboardingWindow.once('ready-to-show', () => {
+        if (onboardingWindow.isDestroyed()) return
+        onboardingWindow.show()
+        onboardingWindow.focus()
+      })
     }
+    overlayWindow = createOverlayWindow()
+    tray = createTray()
+
+    if (smokeTestMode) {
+      await Promise.all([
+        waitForRendererLoad(mainWindow),
+        waitForRendererLoad(overlayWindow)
+      ])
+      console.info('CURE_VOICER_SMOKE_OK')
+      quitApplication()
+      return
+    }
+
+    void asrEngine.prepare?.().catch((error) => {
+      console.error('Could not prepare local ASR engine', error)
+    })
+    if (preferences.smartCorrectionEnabled) {
+      void smartCorrectionService.prepare().catch((error) => {
+        console.warn('Could not prepare smart correction', error)
+      })
+    }
+
+    if (preferences.onboardingCompleted) {
+      try {
+        configureRecordingActivation(preferences)
+      } catch (error) {
+        console.warn('Could not configure recording activation', error)
+      }
+    }
+  },
+  secondInstance: () => {
+    // The tray app does not open settings for repeated launches.
+  },
+  beforeQuit: () => {
+    isQuitting = true
+  },
+  willQuit: disposeApplicationResources,
+  windowAllClosed: () => {
+    // Tray apps intentionally stay alive on both desktop platforms.
+  },
+  fatal: (error) => {
+    console.error('Cure Voicer failed to start', error)
+    isQuitting = true
+    app.exit(1)
   }
 })
 
-app.on('second-instance', () => {
-  // Cure Voicer remains a background tray app. A repeated launch must
-  // not create another overlay or open settings without an explicit tray action.
-})
-
-app.on('before-quit', () => {
-  // Allow the settings window to close during an actual quit or a dev hot-reload.
-  // Without this guard the close handler hides the window and leaves an orphaned
-  // Electron process holding the single-instance lock.
-  isQuitting = true
-})
-
-app.on('will-quit', () => {
-  disposeApplicationResources()
-})
-app.on('window-all-closed', () => {
-  // Tray apps intentionally stay alive on both desktop platforms.
-})
+function waitForRendererLoad(window: BrowserWindow): Promise<void> {
+  if (!window.webContents.isLoadingMainFrame()) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    window.webContents.once('did-finish-load', () => resolve())
+    window.webContents.once('did-fail-load', (_event, code, description) => {
+      reject(new Error(`Renderer failed to load (${code}): ${description}`))
+    })
+  })
+}

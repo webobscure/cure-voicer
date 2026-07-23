@@ -1,13 +1,13 @@
 import type {
   AppPreferences,
-  CureVoicerApi,
+  CureVoicerOverlayApi,
   OverlayMotion,
   RecordingState
 } from '../shared/contracts'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
 
 const caption = document.getElementById('overlayCaption')
-const api = window.cureVoicer as CureVoicerApi | undefined
+const api = window.cureVoicerOverlay as CureVoicerOverlayApi | undefined
 const rootStyle = document.documentElement.style
 const stage = document.querySelector<HTMLElement>('.orb-stage')
 const brandLogo = document.querySelector<HTMLImageElement>('.brand-logo')
@@ -111,7 +111,7 @@ if (api) {
     document.body.dataset.motion = overlayMotion
   }
   api.onOverlayPreferencesChanged(applyPreferences)
-  api.getAppInfo().then((info) => applyPreferences(info.preferences)).catch(console.error)
+  api.getOverlayInfo().then((info) => applyPreferences(info.preferences)).catch(console.error)
   api.onOverlayAudioLevel((level) => {
     targetLevel = Math.max(0, Math.min(1, level))
   })

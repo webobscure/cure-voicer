@@ -19,6 +19,11 @@
     "src/shared/platform-shortcuts.ts",
     "src/shared/smart-correction.ts",
     "src/shared/transcript-postprocessor.ts",
-    "src/shared/vocabulary.ts"
+    "src/shared/vocabulary.ts",
+    "src/shared/types/**/*.ts",
+    "src/shared/validation/**/*.ts",
+    "src/modules/**/*.ts",
+    "src/main/ipc/**/*.ts",
+    "src/main/security/**/*.ts"
   ]
 }

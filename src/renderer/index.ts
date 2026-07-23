@@ -11,9 +11,11 @@ import type {
   SmartCorrectionStatus
 } from '../shared/contracts'
 import { AudioRecorder } from './audio-recorder'
+import { mountReactFeatures } from './app/bootstrap'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
 
 const api = window.cureVoicer as CureVoicerApi | undefined
+mountReactFeatures(api)
 
 const recordButton = getElement<HTMLButtonElement>('recordButton')
 const statusLabel = getElement('statusLabel')
@@ -346,7 +348,8 @@ const paneCopy: Record<string, [string, string]> = {
   dictation: ['Диктовка', 'Запись, завершение речи и плавающий индикатор'],
   models: ['Модели', 'Локальные движки распознавания речи'],
   vocabulary: ['Словарь', 'Имена и термины для более точной диктовки'],
-  history: ['История', 'Недавние локальные диктовки']
+  history: ['История', 'Недавние локальные диктовки'],
+  diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
 }
 
 function selectPane(paneId: string): void {

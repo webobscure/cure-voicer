@@ -11,27 +11,37 @@
     "build:tray-icons": "node scripts/render-tray-icons.mjs",
     "build:macos-asr": "swift build -c release --package-path native/macos-asr",
     "build": "electron-vite build",
+    "lint": "oxlint src tests scripts electron.vite.config.ts",
+    "pack:mac": "npm run build:macos-asr && npm run build && electron-builder --mac --arm64 --config electron-builder.yml",
     "pack:win": "npm run build && electron-builder --win --x64 --config electron-builder.yml",
     "pack:win:portable": "npm run build && electron-builder --win portable --x64 --config electron-builder.yml",
     "pack:win:nsis": "npm run build && electron-builder --win nsis --x64 --config electron-builder.yml",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "test:smoke": "npm run build && node scripts/smoke-electron.mjs",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.10.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
     "electron": "^43.1.1",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
+    "oxlint": "^1.75.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
   },
   "dependencies": {
     "node-llama-cpp": "^3.19.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "sherpa-onnx-node": "^1.13.4",
-    "uiohook-napi": "^1.5.5"
+    "uiohook-napi": "^1.5.5",
+    "zod": "^4.4.3"
   }
 }
