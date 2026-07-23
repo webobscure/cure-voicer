@@ -142,6 +142,11 @@ let preferences: AppPreferences = {
   },
   voiceCommands: {},
   integrationRules: [],
+  historyEnabled: false,
+  clipboardHistoryEnabled: false,
+  clipboardRetentionDays: 7,
+  theme: 'system',
+  locale: 'system',
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -401,6 +406,8 @@ const paneCopy: Record<string, [string, string]> = {
   commands: ['Голосовые команды', 'Фразы активации, включение и защита команд'],
   hotkeys: ['Горячие клавиши', 'Глобальные действия и проверка конфликтов'],
   integrations: ['Интеграции', 'Правила вставки и обработки для приложений'],
+  templates: ['Шаблоны', 'Закреплённые фрагменты и быстрая вставка'],
+  clipboard: ['Буфер и данные', 'Локальная история, приватность и перенос настроек'],
   diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
 }
 
@@ -438,6 +445,7 @@ function renderOverlayPlacement(placement: OverlayPlacement): void {
 }
 
 function renderPreferences(): void {
+  applyAppearance(preferences)
   activationModeButtons.forEach((button) => {
     button.setAttribute(
       'aria-pressed',
@@ -474,6 +482,13 @@ function renderPreferences(): void {
   renderAsrStatus()
   renderSmartCorrectionStatus()
   renderStateCopy()
+}
+
+function applyAppearance(value: AppPreferences): void {
+  document.documentElement.dataset.theme = value.theme
+  document.documentElement.style.colorScheme = value.theme === 'system' ? 'light dark' : value.theme
+  const systemLocale = navigator.language.toLocaleLowerCase().startsWith('ru') ? 'ru' : 'en'
+  document.documentElement.lang = value.locale === 'system' ? systemLocale : value.locale
 }
 
 function renderAsrStatus(): void {

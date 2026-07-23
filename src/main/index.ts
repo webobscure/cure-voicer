@@ -40,7 +40,7 @@ import { registerApplicationLifecycle } from './app/application-lifecycle'
 import { hardenWindow, RendererPolicy } from './security/renderer-policy'
 import type { DictationSnapshot, DictationState } from '../shared/types/dictation'
 import type { InsertionResult } from '../shared/types/insertion'
-import { textRequestSchema, transformTextRequestSchema } from '../shared/validation/ipc'
+import { templateRequestSchema, textRequestSchema, transformTextRequestSchema } from '../shared/validation/ipc'
 import type { InternalEditorDocumentInput } from '../modules/insertion/ports'
 import {
   audioLevelSchema,
@@ -55,6 +55,10 @@ import {
   recordingStateSchema,
   vocabularyTermSchema
 } from '../shared/validation/legacy-ipc'
+import { LocalDatabase } from './storage/local-database'
+import { isPotentiallySensitiveText } from '../modules/clipboard/sensitive-text'
+import type { ClipboardHistoryItem, TextTemplate } from '../shared/contracts'
+import type { ActiveApplicationContext } from '../shared/types/insertion'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const smokeTestMode = process.env.CURE_VOICER_SMOKE_TEST === '1'
@@ -118,6 +122,11 @@ let preferences: AppPreferences = {
   shortcutBindings: { ...defaultShortcutBindings },
   voiceCommands: {},
   integrationRules: [],
+  historyEnabled: false,
+  clipboardHistoryEnabled: false,
+  clipboardRetentionDays: 7,
+  theme: 'system',
+  locale: 'system',
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -127,6 +136,9 @@ let preferences: AppPreferences = {
 }
 let vocabulary: string[] = []
 let history: DictationHistoryItem[] = []
+let templates: TextTemplate[] = []
+let clipboardHistory: ClipboardHistoryItem[] = []
+let localDatabase: LocalDatabase | null = null
 let isQuitting = false
 let applicationResourcesDisposed = false
 let isProgrammaticOverlayMove = false
@@ -407,7 +419,9 @@ function registerIpc(): void {
       history,
       smartCorrection: smartCorrectionService.status,
       asrStatus: asrEngine.status,
-      shortcutConflicts
+      shortcutConflicts,
+      templates,
+      clipboardHistory
     }
   })
 
@@ -540,7 +554,7 @@ function registerIpc(): void {
       try {
         const result = await activeRecordingFinish
         completeMachineFromLegacyResult(operationId, result.transcript, result.insertion)
-        if (result.transcript) {
+        if (result.transcript && preferences.historyEnabled) {
           history = [
             {
               id: randomUUID(),
@@ -553,6 +567,13 @@ function registerIpc(): void {
             ...history
           ].slice(0, 100)
           await saveAppState()
+        }
+        if (
+          result.transcript &&
+          result.insertion === 'clipboard' &&
+          preferences.clipboardHistoryEnabled
+        ) {
+          await addClipboardHistoryItem(result.transcript, activeApplication)
         }
         return result
       } catch (error) {
@@ -585,6 +606,9 @@ function registerIpc(): void {
       assertSettingsSender(event)
       preferences = await applyPreferencePatch(legacyPreferencesPatchSchema.parse(patch))
       applyVoiceCommandPreferences()
+      clipboardHistory = preferences.clipboardHistoryEnabled
+        ? localDatabase?.listClipboardHistory(preferences.clipboardRetentionDays) ?? []
+        : []
       await saveAppState()
       overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
       updateOverlayState(currentState)
@@ -666,9 +690,113 @@ function registerIpc(): void {
     await saveAppState()
   })
 
-  ipcMain.handle(IPC.copyText, (event, text: string) => {
+  ipcMain.handle(IPC.upsertTemplate, async (event, request: unknown) => {
     assertSettingsSender(event)
-    clipboard.writeText(copyTextSchema.parse(text))
+    const value = templateRequestSchema.parse(request)
+    const existing = templates.find((item) => item.id === value.id)
+    const now = new Date().toISOString()
+    const template: TextTemplate = {
+      ...value,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    }
+    localDatabase?.upsertTemplate(template)
+    templates = localDatabase?.listTemplates() ?? [template, ...templates]
+    if (preferences.onboardingCompleted && !hotkeyCaptureActive) configureRecordingActivation(preferences)
+    return templates
+  })
+
+  ipcMain.handle(IPC.removeTemplate, (event, id: unknown) => {
+    assertSettingsSender(event)
+    const validatedId = historyIdSchema.parse(id)
+    localDatabase?.removeTemplate(validatedId)
+    templates = templates.filter((item) => item.id !== validatedId)
+    if (preferences.onboardingCompleted && !hotkeyCaptureActive) configureRecordingActivation(preferences)
+    return templates
+  })
+
+  ipcMain.handle(IPC.clearClipboardHistory, (event) => {
+    assertSettingsSender(event)
+    localDatabase?.clearClipboardHistory()
+    clipboardHistory = []
+  })
+
+  ipcMain.handle(IPC.exportSettings, async (event) => {
+    assertSettingsSender(event)
+    const options: Electron.SaveDialogOptions = {
+      title: 'Экспорт настроек Cure Voicer',
+      defaultPath: 'cure-voicer-settings.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    }
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return false
+    await writeFile(result.filePath, JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      preferences,
+      overlayPlacement,
+      vocabulary,
+      templates
+    }, null, 2), { mode: 0o600 })
+    return true
+  })
+
+  ipcMain.handle(IPC.importSettings, async (event) => {
+    assertSettingsSender(event)
+    const options: Electron.OpenDialogOptions = {
+      title: 'Импорт настроек Cure Voicer',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    }
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options)
+    const filePath = result.filePaths[0]
+    if (result.canceled || !filePath) return null
+    const imported = JSON.parse(await readFile(filePath, 'utf8')) as unknown
+    if (!imported || typeof imported !== 'object' || !('preferences' in imported)) {
+      throw new Error('Invalid Cure Voicer settings file')
+    }
+    preferences = await applyPreferencePatch(
+      legacyPreferencesPatchSchema.parse(imported.preferences)
+    )
+    if ('vocabulary' in imported && Array.isArray(imported.vocabulary)) {
+      vocabulary = imported.vocabulary
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 500)
+    }
+    if ('templates' in imported && Array.isArray(imported.templates)) {
+      for (const candidate of imported.templates.slice(0, 500)) {
+        const parsed = templateRequestSchema.safeParse(candidate)
+        if (!parsed.success) continue
+        const existing = templates.find((item) => item.id === parsed.data.id)
+        const now = new Date().toISOString()
+        localDatabase?.upsertTemplate({
+          ...parsed.data,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now
+        })
+      }
+      templates = localDatabase?.listTemplates() ?? templates
+    }
+    applyVoiceCommandPreferences()
+    await saveAppState()
+    overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
+    return preferences
+  })
+
+  ipcMain.handle(IPC.copyText, async (event, text: string) => {
+    assertSettingsSender(event)
+    const validatedText = copyTextSchema.parse(text)
+    clipboard.writeText(validatedText)
+    if (preferences.clipboardHistoryEnabled) {
+      const activeApplication = await activeApplications.getActiveApplication().catch(() => undefined)
+      await addClipboardHistoryItem(validatedText, activeApplication)
+    }
   })
 
   ipcMain.handle(IPC.prepareAsr, async (event) => {
@@ -1004,6 +1132,14 @@ function registerSecondaryShortcuts(nextPreferences: AppPreferences): void {
       })
     })
   }
+  for (const template of templates) {
+    if (!template.pinned || !template.shortcut) continue
+    registerOptionalShortcut(template.shortcut, () => {
+      void insertTemplate(template).catch((error) => {
+        console.warn(`Template shortcut failed: ${template.id}`, error)
+      })
+    })
+  }
 }
 
 async function repeatLastInsertion(): Promise<void> {
@@ -1018,6 +1154,19 @@ async function repeatLastInsertion(): Promise<void> {
         : preferences.insertionMode,
     activeApplication,
     originalText: text,
+    blockedApplicationIds: preferences.blockedApplicationIds,
+    allowFallback: true
+  })
+}
+
+async function insertTemplate(template: TextTemplate): Promise<void> {
+  const activeApplication = await activeApplications.getActiveApplication()
+  const resolution = await integrations.resolve(activeApplication, preferences.integrationRules)
+  await insertion.insertText(template.text, {
+    operationId: randomUUID(),
+    requestedMode: resolution.strategy.preferredMode,
+    activeApplication,
+    originalText: template.text,
     blockedApplicationIds: preferences.blockedApplicationIds,
     allowFallback: true
   })
@@ -1273,10 +1422,27 @@ function isInsertionMode(value: unknown): value is AppPreferences['insertionMode
   ].includes(String(value))
 }
 
+function isTheme(value: unknown): value is AppPreferences['theme'] {
+  return ['system', 'light', 'dark'].includes(String(value))
+}
+
+function isLocale(value: unknown): value is AppPreferences['locale'] {
+  return ['system', 'ru', 'en'].includes(String(value))
+}
+
 async function loadAppState(): Promise<void> {
   try {
-    const contents = await readFile(settingsFilePath(), 'utf8')
-    const state = JSON.parse(contents) as Partial<PersistedAppState>
+    await mkdir(app.getPath('userData'), { recursive: true })
+    localDatabase = new LocalDatabase(databaseFilePath())
+    const databaseState = localDatabase.loadApplicationState()
+    let state: Partial<PersistedAppState> = databaseState ?? {}
+    if (!databaseState) {
+      const contents = await readFile(settingsFilePath(), 'utf8').catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return ''
+        throw error
+      })
+      if (contents) state = JSON.parse(contents) as Partial<PersistedAppState>
+    }
     const value = state.overlayPlacement
     if (value && isPresetPlacement(value.mode)) overlayPlacement = { mode: value.mode }
     else if (
@@ -1325,6 +1491,21 @@ async function loadAppState(): Promise<void> {
         integrationRules: isIntegrationRules(stored.integrationRules)
           ? stored.integrationRules
           : [],
+        historyEnabled:
+          typeof stored.historyEnabled === 'boolean' ? stored.historyEnabled : false,
+        clipboardHistoryEnabled:
+          typeof stored.clipboardHistoryEnabled === 'boolean'
+            ? stored.clipboardHistoryEnabled
+            : false,
+        clipboardRetentionDays:
+          typeof stored.clipboardRetentionDays === 'number' &&
+          Number.isInteger(stored.clipboardRetentionDays) &&
+          stored.clipboardRetentionDays >= 1 &&
+          stored.clipboardRetentionDays <= 365
+            ? stored.clipboardRetentionDays
+            : 7,
+        theme: isTheme(stored.theme) ? stored.theme : 'system',
+        locale: isLocale(stored.locale) ? stored.locale : 'system',
         keepRecordings:
           typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
@@ -1360,10 +1541,13 @@ async function loadAppState(): Promise<void> {
     history = Array.isArray(state.history)
       ? state.history.filter(isHistoryItem).slice(0, 100)
       : []
+    localDatabase.importLegacyOnce({ overlayPlacement, preferences, vocabulary, history })
+    templates = localDatabase.listTemplates()
+    clipboardHistory = preferences.clipboardHistoryEnabled
+      ? localDatabase.listClipboardHistory(preferences.clipboardRetentionDays)
+      : []
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.warn('Could not load overlay placement', error)
-    }
+    console.warn('Could not load local application state', error)
   }
 }
 
@@ -1372,10 +1556,12 @@ async function saveOverlayPlacement(): Promise<void> {
 }
 
 async function saveAppState(): Promise<void> {
-  const filePath = settingsFilePath()
-  await mkdir(path.dirname(filePath), { recursive: true })
   const state: PersistedAppState = { overlayPlacement, preferences, vocabulary, history }
-  await writeFile(filePath, JSON.stringify(state, null, 2))
+  if (!localDatabase) {
+    await mkdir(app.getPath('userData'), { recursive: true })
+    localDatabase = new LocalDatabase(databaseFilePath())
+  }
+  localDatabase.saveApplicationState(state)
 }
 
 async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<AppPreferences> {
@@ -1400,6 +1586,8 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   for (const key of [
     'launchAtLogin',
     'autoPaste',
+    'historyEnabled',
+    'clipboardHistoryEnabled',
     'keepRecordings',
     'showOverlayWhenIdle',
     'smartCorrectionEnabled',
@@ -1439,6 +1627,20 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   }
   if (patch.integrationRules !== undefined) {
     next.integrationRules = patch.integrationRules
+  }
+  if (patch.clipboardRetentionDays !== undefined) {
+    if (!Number.isInteger(patch.clipboardRetentionDays) || patch.clipboardRetentionDays < 1 || patch.clipboardRetentionDays > 365) {
+      throw new Error('Invalid clipboard retention period')
+    }
+    next.clipboardRetentionDays = patch.clipboardRetentionDays
+  }
+  if (patch.theme !== undefined) {
+    if (!isTheme(patch.theme)) throw new Error('Invalid theme')
+    next.theme = patch.theme
+  }
+  if (patch.locale !== undefined) {
+    if (!isLocale(patch.locale)) throw new Error('Invalid locale')
+    next.locale = patch.locale
   }
   if (patch.autoStopSilenceMs !== undefined) {
     if (
@@ -1583,6 +1785,38 @@ function settingsFilePath(): string {
   return path.join(app.getPath('userData'), 'settings.json')
 }
 
+function databaseFilePath(): string {
+  return path.join(app.getPath('userData'), 'cure-voicer.sqlite3')
+}
+
+async function addClipboardHistoryItem(
+  text: string,
+  activeApplication?: ActiveApplicationContext
+): Promise<void> {
+  if (!preferences.clipboardHistoryEnabled || isPotentiallySensitiveText(text)) return
+  if (activeApplication?.isSecureField) return
+  const identities = [
+    activeApplication?.applicationId,
+    activeApplication?.applicationName,
+    activeApplication?.executablePath
+  ].filter((value): value is string => Boolean(value))
+  if (
+    identities.some((identity) =>
+      preferences.blockedApplicationIds.some(
+        (blocked) => blocked.toLocaleLowerCase() === identity.toLocaleLowerCase()
+      )
+    )
+  ) return
+  const item: ClipboardHistoryItem = {
+    id: randomUUID(),
+    text,
+    createdAt: new Date().toISOString(),
+    applicationId: activeApplication?.applicationId ?? activeApplication?.applicationName
+  }
+  localDatabase?.addClipboardItem(item)
+  clipboardHistory = localDatabase?.listClipboardHistory(preferences.clipboardRetentionDays) ?? [item, ...clipboardHistory].slice(0, 100)
+}
+
 function showWindow(pane?: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     const replacement = createWindow()
@@ -1643,6 +1877,8 @@ function disposeApplicationResources(): void {
   endOverlayDrag()
   asrEngine.dispose?.()
   smartCorrectionService.dispose()
+  localDatabase?.close()
+  localDatabase = null
 }
 
 if (!hasSingleInstanceLock) app.quit()

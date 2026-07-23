@@ -79,6 +79,11 @@ export const legacyPreferencesPatchSchema = z
         shortcut: z.string().trim().min(1).max(100).optional()
       })
     ).max(500),
+    historyEnabled: z.boolean(),
+    clipboardHistoryEnabled: z.boolean(),
+    clipboardRetentionDays: z.number().int().min(1).max(365),
+    theme: z.enum(['system', 'light', 'dark']),
+    locale: z.enum(['system', 'ru', 'en']),
     keepRecordings: z.boolean(),
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),

@@ -3,6 +3,8 @@ import type {
   CureVoicerApi,
   EditorCommand,
   InternalEditorPayload,
+  ClipboardHistoryItem,
+  TextTemplate,
   TransformTextRequest,
   TransformTextResponse
 } from '../../../shared/contracts'
@@ -31,6 +33,13 @@ export interface DesktopClient {
   insertEditorText(text: string): Promise<InsertionResult>
   getPreferences(): Promise<AppInfo['preferences']>
   updatePreferences(patch: Partial<AppInfo['preferences']>): Promise<AppInfo['preferences']>
+  getTemplates(): Promise<TextTemplate[]>
+  getClipboardHistory(): Promise<ClipboardHistoryItem[]>
+  upsertTemplate(template: Pick<TextTemplate, 'id' | 'name' | 'text' | 'pinned' | 'shortcut'>): Promise<TextTemplate[]>
+  removeTemplate(id: string): Promise<TextTemplate[]>
+  clearClipboardHistory(): Promise<void>
+  exportSettings(): Promise<boolean>
+  importSettings(): Promise<AppInfo['preferences'] | null>
 }
 
 export class ElectronDesktopClient implements DesktopClient {
@@ -88,5 +97,33 @@ export class ElectronDesktopClient implements DesktopClient {
     patch: Partial<AppInfo['preferences']>
   ): Promise<AppInfo['preferences']> {
     return this.api.updatePreferences(patch)
+  }
+
+  async getTemplates(): Promise<TextTemplate[]> {
+    return (await this.api.getAppInfo()).templates
+  }
+
+  async getClipboardHistory(): Promise<ClipboardHistoryItem[]> {
+    return (await this.api.getAppInfo()).clipboardHistory
+  }
+
+  upsertTemplate(template: Pick<TextTemplate, 'id' | 'name' | 'text' | 'pinned' | 'shortcut'>): Promise<TextTemplate[]> {
+    return this.api.upsertTemplate(template)
+  }
+
+  removeTemplate(id: string): Promise<TextTemplate[]> {
+    return this.api.removeTemplate(id)
+  }
+
+  clearClipboardHistory(): Promise<void> {
+    return this.api.clearClipboardHistory()
+  }
+
+  exportSettings(): Promise<boolean> {
+    return this.api.exportSettings()
+  }
+
+  importSettings(): Promise<AppInfo['preferences'] | null> {
+    return this.api.importSettings()
   }
 }

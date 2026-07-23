@@ -215,15 +215,22 @@ separate non-overridable insertion safety check.
 
 ## Stage 7 — product data and settings
 
-Status: **not started**
+Status: **in progress**
 
-- [ ] Add SQLite repositories and idempotent migrations from `settings.json`.
-- [ ] Add independent, opt-in history retention and deletion controls.
-- [ ] Add templates, pinned fragments and optional clipboard history.
-- [ ] Add sensitive-data heuristics, application exclusions and retention TTL.
-- [ ] Add import/export with schema validation and secret exclusion.
+- [x] Add SQLite repositories and idempotent migrations from `settings.json`.
+- [x] Add independent, opt-in history retention and deletion controls.
+- [x] Add templates, pinned fragments and optional clipboard history.
+- [x] Add sensitive-data heuristics, application exclusions and retention TTL.
+- [x] Add import/export with schema validation and secret exclusion.
 - [ ] Complete Russian/English localization and theme handling.
 - [ ] Migrate onboarding and settings to feature-based React pages.
+
+SQLite is now the source of truth; the legacy JSON file is read only for a
+one-time, idempotent import and is not deleted. Clipboard history never polls the
+system clipboard: it records only explicit Cure Voicer copy results after opt-in,
+applies retention on reads, and rejects credential/private-key/payment-card
+patterns and excluded applications. Templates support pinning, search and
+optional global insertion shortcuts.
 
 ## Stage 8 — hardening, diagnostics and release
 

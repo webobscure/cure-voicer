@@ -24,6 +24,11 @@ export const IPC = {
   removeVocabularyTerm: 'settings:remove-vocabulary-term',
   removeHistoryEntry: 'settings:remove-history-entry',
   clearHistory: 'settings:clear-history',
+  upsertTemplate: 'templates:upsert',
+  removeTemplate: 'templates:remove',
+  clearClipboardHistory: 'clipboard-history:clear',
+  exportSettings: 'settings:export',
+  importSettings: 'settings:import',
   copyText: 'settings:copy-text',
   prepareAsr: 'models:prepare-asr',
   prepareSmartCorrection: 'models:prepare-smart-correction',
@@ -118,12 +123,34 @@ export interface AppPreferences {
   shortcutBindings: Record<string, string>
   voiceCommands: Record<string, { enabled: boolean; phrases: string[] }>
   integrationRules: import('./types/integrations').AppIntegrationRule[]
+  historyEnabled: boolean
+  clipboardHistoryEnabled: boolean
+  clipboardRetentionDays: number
+  theme: 'system' | 'light' | 'dark'
+  locale: 'system' | 'ru' | 'en'
   keepRecordings: boolean
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
   smartCorrectionEnabled: boolean
   autoStopSilenceMs: number
   onboardingCompleted: boolean
+}
+
+export interface TextTemplate {
+  id: string
+  name: string
+  text: string
+  pinned: boolean
+  shortcut?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ClipboardHistoryItem {
+  id: string
+  text: string
+  createdAt: string
+  applicationId?: string
 }
 
 export interface DictationHistoryItem {
@@ -149,6 +176,8 @@ export interface AppInfo {
   smartCorrection: SmartCorrectionStatus
   asrStatus: AsrStatus
   shortcutConflicts: string[]
+  templates: TextTemplate[]
+  clipboardHistory: ClipboardHistoryItem[]
 }
 
 export interface OverlayInfo {
@@ -211,6 +240,11 @@ export interface CureVoicerApi {
   removeVocabularyTerm(term: string): Promise<string[]>
   removeHistoryEntry(id: string): Promise<DictationHistoryItem[]>
   clearHistory(): Promise<void>
+  upsertTemplate(template: Pick<TextTemplate, 'id' | 'name' | 'text' | 'pinned' | 'shortcut'>): Promise<TextTemplate[]>
+  removeTemplate(id: string): Promise<TextTemplate[]>
+  clearClipboardHistory(): Promise<void>
+  exportSettings(): Promise<boolean>
+  importSettings(): Promise<AppPreferences | null>
   copyText(text: string): Promise<void>
   prepareAsr(): Promise<AsrStatus>
   prepareSmartCorrection(): Promise<SmartCorrectionStatus>

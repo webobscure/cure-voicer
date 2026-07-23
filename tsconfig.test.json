@@ -26,6 +26,7 @@
     "src/platform/**/*.ts",
     "src/main/asr/types.ts",
     "src/main/ipc/**/*.ts",
+    "src/main/storage/**/*.ts",
     "src/main/security/**/*.ts"
   ]
 }

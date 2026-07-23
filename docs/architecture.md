@@ -86,6 +86,13 @@ policy. Integration code cannot directly insert or read secrets.
 Repositories isolate persistence. Schemas are versioned and migrations are
 idempotent. Secret values are references to protected storage, not database text.
 
+`LocalDatabase` owns `cure-voicer.sqlite3` in Electron's user-data directory and
+uses WAL transactions. It stores settings, dictation history, templates and the
+opt-in clipboard history in separate tables. `settings.json` is imported once if
+the database has no application state; the file is retained as a rollback copy.
+The main process is the only database client, so renderers can only use validated,
+task-specific IPC operations.
+
 ## Current migration seam
 
 The current `RecordingService` remains the compatibility pipeline. New domain
@@ -95,4 +102,3 @@ contracts live in `src/shared/types`; Zod validation lives in
 The orb has a separate, minimal preload.
 
 See `rewrite-plan.md` for stage status and exit criteria.
-

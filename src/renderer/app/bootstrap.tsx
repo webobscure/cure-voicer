@@ -7,12 +7,16 @@ import { EditorPage } from '../features/editor/EditorPage'
 import { CommandSettingsPage } from '../features/commands/CommandSettingsPage'
 import { HotkeySettingsPage } from '../features/shortcuts/HotkeySettingsPage'
 import { IntegrationSettingsPage } from '../features/integrations/IntegrationSettingsPage'
+import { TemplatesPage } from '../features/templates/TemplatesPage'
+import { ClipboardSettingsPage } from '../features/clipboard/ClipboardSettingsPage'
 
 let diagnosticsRoot: Root | null = null
 let editorRoot: Root | null = null
 let commandsRoot: Root | null = null
 let hotkeysRoot: Root | null = null
 let integrationsRoot: Root | null = null
+let templatesRoot: Root | null = null
+let clipboardRoot: Root | null = null
 
 export function mountReactFeatures(api: CureVoicerApi | undefined): void {
   const container = document.getElementById('diagnosticsReactRoot')
@@ -20,7 +24,9 @@ export function mountReactFeatures(api: CureVoicerApi | undefined): void {
   const commandsContainer = document.getElementById('commandsReactRoot')
   const hotkeysContainer = document.getElementById('hotkeysReactRoot')
   const integrationsContainer = document.getElementById('integrationsReactRoot')
-  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot) return
+  const templatesContainer = document.getElementById('templatesReactRoot')
+  const clipboardContainer = document.getElementById('clipboardReactRoot')
+  if ((!container && !editorContainer && !commandsContainer && !hotkeysContainer && !integrationsContainer && !templatesContainer && !clipboardContainer) || diagnosticsRoot || editorRoot || commandsRoot || hotkeysRoot || integrationsRoot || templatesRoot || clipboardRoot) return
 
   if (!api) {
     if (container) container.textContent = 'Диагностика доступна только в приложении.'
@@ -28,6 +34,8 @@ export function mountReactFeatures(api: CureVoicerApi | undefined): void {
     if (commandsContainer) commandsContainer.textContent = 'Команды доступны только в приложении.'
     if (hotkeysContainer) hotkeysContainer.textContent = 'Горячие клавиши доступны только в приложении.'
     if (integrationsContainer) integrationsContainer.textContent = 'Интеграции доступны только в приложении.'
+    if (templatesContainer) templatesContainer.textContent = 'Шаблоны доступны только в приложении.'
+    if (clipboardContainer) clipboardContainer.textContent = 'Буфер доступен только в приложении.'
     return
   }
 
@@ -51,5 +59,13 @@ export function mountReactFeatures(api: CureVoicerApi | undefined): void {
   if (integrationsContainer) {
     integrationsRoot = createRoot(integrationsContainer)
     integrationsRoot.render(<StrictMode><IntegrationSettingsPage client={client} /></StrictMode>)
+  }
+  if (templatesContainer) {
+    templatesRoot = createRoot(templatesContainer)
+    templatesRoot.render(<StrictMode><TemplatesPage client={client} /></StrictMode>)
+  }
+  if (clipboardContainer) {
+    clipboardRoot = createRoot(clipboardContainer)
+    clipboardRoot.render(<StrictMode><ClipboardSettingsPage client={client} /></StrictMode>)
   }
 }

@@ -48,6 +48,11 @@ and fallback fact—not payload content.
 - Transcript history is off by default in the new settings schema.
 - WAV retention is off by default in the new settings schema.
 - Clipboard history is off by default and must never be enabled implicitly.
+- Enabling clipboard history does not enable clipboard polling. Only explicit
+  Cure Voicer copy operations may be recorded, after credential/private-key/card
+  heuristics and sensitive-application checks.
+- Settings export excludes transcript history, clipboard history, audio, model
+  data and future protected credential values.
 - Cloud processing is off by default and requires per-provider consent.
 - API keys will be encrypted using Electron `safeStorage`; unavailable protected
   storage is an explicit diagnostic/error, not a silent plaintext fallback.
@@ -83,4 +88,3 @@ and fallback fact—not payload content.
 - Configure signed auto-updates with rollback policy.
 - Add dependency scanning and produce an SBOM for releases.
 - Threat-model active-application and selected-text adapters before enabling.
-

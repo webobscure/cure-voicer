@@ -64,6 +64,14 @@
             <svg viewBox="0 0 24 24"><path d="M8 12h8M12 8v8"></path><path d="M5 4h4v4H5zM15 4h4v4h-4zM5 16h4v4H5zM15 16h4v4h-4z"></path></svg>
             <span>Интеграции</span>
           </button>
+          <button class="nav-item" type="button" data-nav="templates">
+            <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg>
+            <span>Шаблоны</span>
+          </button>
+          <button class="nav-item" type="button" data-nav="clipboard">
+            <svg viewBox="0 0 24 24"><path d="M9 5h6M9 3h6v4H9zM7 5H5v16h14V5h-2"></path></svg>
+            <span>Буфер и данные</span>
+          </button>
           <button class="nav-item" type="button" data-nav="diagnostics">
             <svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path><circle cx="6" cy="15" r="1"></circle><circle cx="17" cy="6" r="1"></circle></svg>
             <span>Диагностика</span>
@@ -347,6 +355,20 @@
               <div><h2>Интеграции приложений</h2><p>Способ вставки и форматирование для активного приложения</p></div>
             </div>
             <div id="integrationsReactRoot"></div>
+          </section>
+          <section class="settings-pane" data-pane="templates" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon purple"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg></div>
+              <div><h2>Шаблоны</h2><p>Закреплённые фрагменты, поиск и быстрая вставка</p></div>
+            </div>
+            <div id="templatesReactRoot"></div>
+          </section>
+          <section class="settings-pane" data-pane="clipboard" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon green"><svg viewBox="0 0 24 24"><path d="M9 5h6M9 3h6v4H9zM7 5H5v16h14V5h-2"></path></svg></div>
+              <div><h2>Буфер и данные</h2><p>Опциональная история, хранение и перенос настроек</p></div>
+            </div>
+            <div id="clipboardReactRoot"></div>
           </section>
         </div>
       </section>

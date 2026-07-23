@@ -24,3 +24,11 @@ export const transformTextRequestSchema = z.object({
   targetLanguage: z.string().trim().min(1).max(100).optional(),
   customInstruction: z.string().trim().min(1).max(1_000).optional()
 })
+
+export const templateRequestSchema = z.object({
+  id: z.string().trim().min(1).max(100),
+  name: z.string().trim().min(1).max(120),
+  text: z.string().min(1).max(100_000),
+  pinned: z.boolean(),
+  shortcut: z.string().trim().min(1).max(100).optional()
+})
