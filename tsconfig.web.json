@@ -15,6 +15,7 @@
     "src/renderer/**/*.ts",
     "src/renderer/**/*.tsx",
     "src/shared/**/*.ts",
-    "src/modules/dictation/**/*.ts"
+    "src/modules/dictation/**/*.ts",
+    "src/modules/editor/**/*.ts"
   ]
 }

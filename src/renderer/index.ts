@@ -131,6 +131,7 @@ let preferences: AppPreferences = {
   autoPaste: true,
   insertionMode: 'keyboard',
   blockedApplicationIds: [],
+  transformationPresetId: 'none',
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -156,12 +157,6 @@ let history: DictationHistoryItem[] = []
 const recorder = new AudioRecorder(updateLevel)
 const silenceDetector = new SilenceDetector(() => {
   if (state === 'recording') void finishRecording()
-})
-api?.onInternalEditorText((text) => {
-  resultText.textContent = text
-  resultPath.textContent = 'Открыто во внутреннем редакторе'
-  latestResultCard.hidden = false
-  selectPane('history')
 })
 
 async function setState(nextState: RecordingState): Promise<void> {
@@ -392,6 +387,7 @@ const paneCopy: Record<string, [string, string]> = {
   models: ['Модели', 'Локальные движки распознавания речи'],
   vocabulary: ['Словарь', 'Имена и термины для более точной диктовки'],
   history: ['История', 'Недавние локальные диктовки'],
+  editor: ['Редактор', 'Сравнение, ручная правка и локальная обработка'],
   diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
 }
 
@@ -410,6 +406,8 @@ function selectPane(paneId: string): void {
   pageTitle.textContent = title
   pageSubtitle.textContent = subtitle
 }
+
+api?.onInternalEditorText(() => selectPane('editor'))
 
 function renderOverlayPlacement(placement: OverlayPlacement): void {
   placementButtons.forEach((button) => {

@@ -848,3 +848,14 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+/* React result editor */
+.editor-feature { display: grid; gap: 14px; }
+.editor-toolbar, .editor-find { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.editor-toolbar select, .editor-toolbar input, .editor-find input { min-height: 38px; border: 1px solid var(--line); border-radius: 11px; padding: 0 12px; background: rgba(255, 255, 255, .64); color: inherit; }
+.editor-toolbar button, .editor-find button { min-height: 38px; border: 0; border-radius: 11px; padding: 0 14px; background: #087ff5; color: white; font-weight: 650; }
+.editor-toolbar button:disabled, .editor-find button:disabled { opacity: .42; }
+.editor-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.editor-compare label { display: grid; gap: 7px; color: var(--secondary); font-size: 13px; font-weight: 650; }
+.editor-compare textarea { min-height: 280px; resize: vertical; border: 1px solid var(--line); border-radius: 16px; padding: 15px; background: rgba(255, 255, 255, .62); color: var(--primary); font: 14px/1.55 system-ui, sans-serif; }
+.editor-find span { margin-left: auto; color: var(--secondary); font-size: 12px; }
+@media (max-width: 820px) { .editor-compare { grid-template-columns: 1fr; } }

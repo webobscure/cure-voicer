@@ -38,6 +38,8 @@ import { registerApplicationLifecycle } from './app/application-lifecycle'
 import { hardenWindow, RendererPolicy } from './security/renderer-policy'
 import type { DictationSnapshot, DictationState } from '../shared/types/dictation'
 import type { InsertionResult } from '../shared/types/insertion'
+import { textRequestSchema, transformTextRequestSchema } from '../shared/validation/ipc'
+import type { InternalEditorDocumentInput } from '../modules/insertion/ports'
 import {
   audioLevelSchema,
   booleanValueSchema,
@@ -76,6 +78,9 @@ const {
   dictation: dictationMachine,
   activeApplications,
   internalEditor,
+  transformations,
+  insertion,
+  applicationActivator,
   recording: recordingService,
   smartCorrection: smartCorrectionService
 } = applicationServices
@@ -95,6 +100,7 @@ let preferences: AppPreferences = {
   autoPaste: true,
   insertionMode: 'keyboard',
   blockedApplicationIds: [],
+  transformationPresetId: 'none',
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -113,6 +119,7 @@ let overlayDragSafetyTimer: ReturnType<typeof setTimeout> | null = null
 let activeRecordingFinish: ReturnType<RecordingService['finish']> | null = null
 let activeRecordingAbortController: AbortController | null = null
 const activeApplicationByOperation = new Map<string, Awaited<ReturnType<typeof activeApplications.getActiveApplication>>>()
+let latestEditorInput: InternalEditorDocumentInput | null = null
 let overlayHiddenUntilRecording = false
 let keyboardHookRunning = false
 let holdKeyPressed = false
@@ -121,9 +128,15 @@ let hotkeyCaptureActive = false
 let hotkeyCaptureSafetyTimer: ReturnType<typeof setTimeout> | null = null
 
 dictationMachine.subscribe((snapshot) => synchronizeLegacyPresentation(snapshot))
-internalEditor.setHandler((text) => {
+internalEditor.setHandler((input) => {
+  latestEditorInput = input
   showWindow()
-  mainWindow?.webContents.send(IPC.internalEditorText, text)
+  mainWindow?.webContents.send(IPC.internalEditorText, {
+    originalText: input.originalText,
+    text: input.text,
+    applicationName: input.activeApplication.applicationName,
+    insertionMode: input.insertionMode
+  })
 })
 
 interface PersistedAppState {
@@ -360,6 +373,43 @@ function registerIpc(): void {
     cancelActiveDictation('user-request')
   })
 
+  ipcMain.handle(IPC.transformText, async (event, request: unknown) => {
+    assertSettingsSender(event)
+    const validated = transformTextRequestSchema.parse(request)
+    const result = await transformations.transform(validated.text, {
+      operationId: randomUUID(),
+      presetId: validated.presetId,
+      targetLanguage: validated.targetLanguage,
+      customInstruction: validated.customInstruction,
+      preferredTerms: vocabulary,
+      allowExternalService: false
+    })
+    return {
+      transformedText: result.transformedText,
+      changed: result.changed,
+      durationMs: result.durationMs
+    }
+  })
+
+  ipcMain.handle(IPC.insertEditorText, async (event, request: unknown) => {
+    assertSettingsSender(event)
+    const { text } = textRequestSchema.parse(request)
+    const editorInput = latestEditorInput
+    if (!editorInput) throw new Error('There is no editor target to restore')
+    await applicationActivator.activate(editorInput.activeApplication)
+    return insertion.insertText(text, {
+      operationId: randomUUID(),
+      requestedMode:
+        preferences.insertionMode === 'internal-editor'
+          ? 'keyboard'
+          : preferences.insertionMode,
+      activeApplication: editorInput.activeApplication,
+      originalText: editorInput.originalText,
+      blockedApplicationIds: preferences.blockedApplicationIds,
+      allowFallback: true
+    })
+  })
+
   ipcMain.on(IPC.setAudioLevel, (event, level: number) => {
     assertSettingsSender(event)
     const validatedLevel = audioLevelSchema.parse(level)
@@ -388,7 +438,8 @@ function registerIpc(): void {
         operationId,
         activeApplication: activeApplicationByOperation.get(operationId),
         insertionMode: preferences.insertionMode,
-        blockedApplicationIds: preferences.blockedApplicationIds
+        blockedApplicationIds: preferences.blockedApplicationIds,
+        transformationPresetId: preferences.transformationPresetId
       })
       try {
         const result = await activeRecordingFinish
@@ -1057,6 +1108,12 @@ async function loadAppState(): Promise<void> {
               .filter(Boolean)
               .slice(0, 500)
           : [],
+        transformationPresetId:
+          typeof stored.transformationPresetId === 'string' &&
+          stored.transformationPresetId.trim().length > 0 &&
+          stored.transformationPresetId.length <= 100
+            ? stored.transformationPresetId
+            : 'none',
         keepRecordings:
           typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
@@ -1159,6 +1216,9 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   }
   if (patch.blockedApplicationIds !== undefined) {
     next.blockedApplicationIds = patch.blockedApplicationIds
+  }
+  if (patch.transformationPresetId !== undefined) {
+    next.transformationPresetId = patch.transformationPresetId
   }
   if (patch.autoStopSilenceMs !== undefined) {
     if (

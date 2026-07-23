@@ -22,6 +22,7 @@ export interface InsertionContext {
   requestedMode: InsertionMode
   activeApplication: ActiveApplicationContext
   blockedApplicationIds?: readonly string[]
+  originalText?: string
   allowFallback: boolean
   signal?: AbortSignal
 }

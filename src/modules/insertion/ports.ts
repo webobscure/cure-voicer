@@ -14,5 +14,12 @@ export interface ActiveApplicationProvider {
 }
 
 export interface InternalEditorPort {
-  openWithText(text: string): Promise<void>
+  openWithText(input: InternalEditorDocumentInput): Promise<void>
+}
+
+export interface InternalEditorDocumentInput {
+  originalText: string
+  text: string
+  activeApplication: ActiveApplicationContext
+  insertionMode: string
 }

@@ -29,7 +29,9 @@ export const IPC = {
   prepareSmartCorrection: 'models:prepare-smart-correction',
   smartCorrectionStatusChanged: 'models:smart-correction-status-changed',
   asrStatusChanged: 'models:asr-status-changed',
-  internalEditorText: 'editor:open-text'
+  internalEditorText: 'editor:open-text',
+  transformText: 'editor:transform-text',
+  insertEditorText: 'editor:insert-text'
 } as const
 
 export type RecordingState =
@@ -110,6 +112,7 @@ export interface AppPreferences {
   autoPaste: boolean
   insertionMode: import('./types/insertion').InsertionMode
   blockedApplicationIds: string[]
+  transformationPresetId: string
   keepRecordings: boolean
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
@@ -163,6 +166,26 @@ export interface RecordingResult {
   insertion: TextInsertionStatus
 }
 
+export interface TransformTextRequest {
+  text: string
+  presetId: string
+  targetLanguage?: string
+  customInstruction?: string
+}
+
+export interface TransformTextResponse {
+  transformedText: string
+  changed: boolean
+  durationMs: number
+}
+
+export interface InternalEditorPayload {
+  originalText: string
+  text: string
+  applicationName?: string
+  insertionMode: string
+}
+
 export interface CureVoicerApi {
   getAppInfo(): Promise<AppInfo>
   setRecordingState(state: RecordingState): Promise<void>
@@ -195,7 +218,9 @@ export interface CureVoicerApi {
     callback: (status: SmartCorrectionStatus) => void
   ): () => void
   onAsrStatusChanged(callback: (status: AsrStatus) => void): () => void
-  onInternalEditorText(callback: (text: string) => void): () => void
+  onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void
+  transformText(request: TransformTextRequest): Promise<TransformTextResponse>
+  insertEditorText(text: string): Promise<import('./types/insertion').InsertionResult>
 }
 
 export interface CureVoicerOverlayApi {

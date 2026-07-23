@@ -9,7 +9,8 @@ import type {
   PermissionSettingsKind,
   PcmRecordingPayload,
   RecordingState,
-  SmartCorrectionStatus
+  SmartCorrectionStatus,
+  InternalEditorPayload
 } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
 
@@ -97,12 +98,14 @@ const api: CureVoicerApi = {
     ipcRenderer.on(IPC.asrStatusChanged, listener)
     return () => ipcRenderer.removeListener(IPC.asrStatusChanged, listener)
   },
-  onInternalEditorText: (callback: (text: string) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, text: string): void =>
-      callback(text)
+  onInternalEditorText: (callback: (payload: InternalEditorPayload) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: InternalEditorPayload): void =>
+      callback(payload)
     ipcRenderer.on(IPC.internalEditorText, listener)
     return () => ipcRenderer.removeListener(IPC.internalEditorText, listener)
-  }
+  },
+  transformText: (request) => ipcRenderer.invoke(IPC.transformText, request),
+  insertEditorText: (text) => ipcRenderer.invoke(IPC.insertEditorText, { text })
 }
 
 contextBridge.exposeInMainWorld('cureVoicer', api)

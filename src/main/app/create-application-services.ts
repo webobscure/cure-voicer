@@ -19,6 +19,9 @@ import { ElectronClipboardPort } from '../services/electron-clipboard-port'
 import { PlatformTextInputService } from '../services/platform-text-input'
 import { SystemActiveApplicationProvider } from '../services/active-application'
 import { DeferredInternalEditorPort } from '../services/internal-editor-port'
+import { createBuiltInTransformations } from '../../modules/transformations/presets'
+import { TransformationRegistry } from '../../modules/transformations/transformation-registry'
+import { ActiveApplicationActivator } from '../services/active-application-activator'
 
 export interface ApplicationServices {
   asrEngine: AsrEngine
@@ -27,6 +30,9 @@ export interface ApplicationServices {
   transcriptionProviders: SpeechRecognitionProviderRegistry
   activeApplications: SystemActiveApplicationProvider
   internalEditor: DeferredInternalEditorPort
+  transformations: TransformationRegistry
+  insertion: TextInsertionService
+  applicationActivator: ActiveApplicationActivator
   recording: RecordingService
 }
 
@@ -68,6 +74,10 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
       logger: insertionLogger
     }
   )
+  const transformations = new TransformationRegistry(
+    createBuiltInTransformations(smartCorrection)
+  )
+  const applicationActivator = new ActiveApplicationActivator()
 
   return {
     asrEngine,
@@ -76,12 +86,16 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
     transcriptionProviders,
     activeApplications,
     internalEditor,
+    transformations,
+    insertion,
+    applicationActivator,
     recording: new RecordingService(
       transcriptionProviders,
       asrEngine.id,
       smartCorrection,
       insertion,
-      activeApplications
+      activeApplications,
+      transformations
     )
   }
 }

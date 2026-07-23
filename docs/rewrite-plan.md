@@ -156,17 +156,24 @@ still requires the manual Punto matrix documented in `docs/testing.md`.
 
 ## Stage 4 — editor and transformations
 
-Status: **not started**
+Status: **completed on 2026-07-23**
 
-- [ ] Add compact non-focus-stealing result editor plus explicit focus mode.
-- [ ] Add original/transformed/manual versions and undo history.
-- [ ] Define `TextTransformation`, pipeline and transformation registry.
-- [ ] Implement deterministic cleanup transforms and local Qwen adapter.
-- [ ] Add presets: none, punctuation, spelling, filler/repeat removal, written
+- [x] Add an explicit-focus React result editor; automatic insertion continues
+      without focusing Cure Voicer.
+- [x] Add original/transformed/manual versions and undo/redo history.
+- [x] Define `TextTransformation`, pipeline and transformation registry.
+- [x] Implement deterministic cleanup transforms and local Qwen adapter.
+- [x] Add presets: none, punctuation, spelling, filler/repeat removal, written
       style, shorten/expand, tones, list, email, message, specification, translate
       and custom instruction.
-- [ ] Add preview/compare/retry/find-replace/insert/copy controls.
-- [ ] Require explicit opt-in for every external provider.
+- [x] Add preview/compare/retry/find-replace/insert/copy controls.
+- [x] Require explicit opt-in for every external provider; stage 4 registers only
+      deterministic and local-model transformations.
+
+The editor preserves the application captured at dictation start. Explicit
+Insert reactivates that process, revalidates focus and uses the same provider
+chain as automatic insertion. Failure returns to the editor without discarding
+the edited text.
 
 ## Stage 5 — commands, selection and shortcuts
 

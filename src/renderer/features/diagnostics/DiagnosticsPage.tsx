@@ -64,12 +64,11 @@ export function DiagnosticsPage({ client }: DiagnosticsPageProps): React.JSX.Ele
       />
       <DiagnosticCard
         label="Вставка текста"
-        value={
-          diagnostics.currentInsertion === 'legacy-clipboard'
-            ? 'Текущий clipboard-провайдер'
-            : 'Только копирование'
+        value={diagnostics.currentInsertion}
+        ok={
+          diagnostics.currentInsertion === 'keyboard' ||
+          diagnostics.currentInsertion === 'accessibility'
         }
-        ok={false}
       />
       <p className="react-diagnostics-note">
         Диагностика не включает распознанный текст, содержимое буфера обмена или аудио.
@@ -97,4 +96,3 @@ function DiagnosticCard({
     </article>
   )
 }
-

@@ -1,6 +1,9 @@
-import type { InternalEditorPort } from '../../modules/insertion/ports'
+import type {
+  InternalEditorDocumentInput,
+  InternalEditorPort
+} from '../../modules/insertion/ports'
 
-export type InternalEditorHandler = (text: string) => void
+export type InternalEditorHandler = (input: InternalEditorDocumentInput) => void
 
 export class DeferredInternalEditorPort implements InternalEditorPort {
   private handler: InternalEditorHandler | null = null
@@ -9,8 +12,8 @@ export class DeferredInternalEditorPort implements InternalEditorPort {
     this.handler = handler
   }
 
-  async openWithText(text: string): Promise<void> {
+  async openWithText(input: InternalEditorDocumentInput): Promise<void> {
     if (!this.handler) throw new Error('Internal editor window is unavailable')
-    this.handler(text)
+    this.handler(input)
   }
 }

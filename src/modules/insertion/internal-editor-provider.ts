@@ -17,7 +17,12 @@ export class InternalEditorInsertionProvider implements TextInsertionProvider {
 
   insertText(text: string, context: InsertionContext) {
     return runInsertionAttempt(this.id, context, async () => {
-      await this.editor.openWithText(text)
+      await this.editor.openWithText({
+        originalText: context.originalText ?? text,
+        text,
+        activeApplication: context.activeApplication,
+        insertionMode: context.requestedMode
+      })
       return 'opened-editor'
     })
   }

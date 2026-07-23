@@ -1,4 +1,12 @@
-import type { AppInfo, CureVoicerApi } from '../../../shared/contracts'
+import type {
+  AppInfo,
+  CureVoicerApi,
+  InternalEditorPayload,
+  TransformTextRequest,
+  TransformTextResponse
+} from '../../../shared/contracts'
+import type { InsertionMode } from '../../../shared/types/insertion'
+import type { InsertionResult } from '../../../shared/types/insertion'
 
 export interface DiagnosticsViewModel {
   appVersion: string
@@ -7,11 +15,17 @@ export interface DiagnosticsViewModel {
   recognitionState: string
   globalInputAvailable: boolean
   onboardingCompleted: boolean
-  currentInsertion: 'legacy-clipboard' | 'clipboard-only'
+  currentInsertion: InsertionMode
 }
 
 export interface DesktopClient {
   getDiagnostics(): Promise<DiagnosticsViewModel>
+  transformText(request: TransformTextRequest): Promise<TransformTextResponse>
+  copyText(text: string): Promise<void>
+  onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void
+  getDefaultTransformationPreset(): Promise<string>
+  setDefaultTransformationPreset(presetId: string): Promise<void>
+  insertEditorText(text: string): Promise<InsertionResult>
 }
 
 export class ElectronDesktopClient implements DesktopClient {
@@ -27,9 +41,32 @@ export class ElectronDesktopClient implements DesktopClient {
       globalInputAvailable: info.globalInputAvailable,
       onboardingCompleted: info.preferences.onboardingCompleted,
       currentInsertion: info.preferences.autoPaste
-        ? 'legacy-clipboard'
+        ? info.preferences.insertionMode
         : 'clipboard-only'
     }
   }
-}
 
+  transformText(request: TransformTextRequest): Promise<TransformTextResponse> {
+    return this.api.transformText(request)
+  }
+
+  copyText(text: string): Promise<void> {
+    return this.api.copyText(text)
+  }
+
+  onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void {
+    return this.api.onInternalEditorText(callback)
+  }
+
+  async getDefaultTransformationPreset(): Promise<string> {
+    return (await this.api.getAppInfo()).preferences.transformationPresetId
+  }
+
+  async setDefaultTransformationPreset(presetId: string): Promise<void> {
+    await this.api.updatePreferences({ transformationPresetId: presetId })
+  }
+
+  insertEditorText(text: string): Promise<InsertionResult> {
+    return this.api.insertEditorText(text)
+  }
+}

@@ -10,8 +10,10 @@ import {
   type SmartCorrectionContext,
   type SmartCorrectionWorkerMessage,
   type SmartCorrectionWorkerRequest,
-  type TranscriptCorrector
+  type TranscriptCorrector,
+  type InstructionTextTransformer
 } from '../shared/smart-correction'
+import type { TransformationContext } from '../shared/types/transformation'
 
 interface PendingRequest {
   resolve: (value: string) => void
@@ -19,7 +21,7 @@ interface PendingRequest {
   timeout?: ReturnType<typeof setTimeout>
 }
 
-export class SmartCorrectionService implements TranscriptCorrector {
+export class SmartCorrectionService implements TranscriptCorrector, InstructionTextTransformer {
   private worker: UtilityProcess | null = null
   private currentStatus = initialSmartCorrectionStatus()
   private readonly pending = new Map<string, PendingRequest>()
@@ -79,6 +81,28 @@ export class SmartCorrectionService implements TranscriptCorrector {
         preferredTerms: context.preferredTerms
       },
       SMART_CORRECTION_TIMEOUT_MS
+    )
+  }
+
+  async transformText(
+    text: string,
+    instruction: string,
+    context: TransformationContext
+  ): Promise<string> {
+    if (this.currentStatus.state !== 'ready') {
+      throw new Error('Local transformation model is not ready')
+    }
+    if (context.signal?.aborted) throw new Error('Text transformation was cancelled')
+    const id = randomUUID()
+    return this.request(
+      {
+        id,
+        type: 'transform',
+        text,
+        instruction,
+        targetLanguage: context.targetLanguage
+      },
+      SMART_CORRECTION_TIMEOUT_MS * 4
     )
   }
 

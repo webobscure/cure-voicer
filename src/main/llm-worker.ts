@@ -9,8 +9,10 @@ import {
 import type { SmartCorrectionStatus } from '../shared/contracts'
 import {
   buildCorrectionPrompt,
+  buildTransformationPrompt,
   initialSmartCorrectionStatus,
   sanitizeModelCorrection,
+  sanitizeModelTransformation,
   SMART_CORRECTION_MODEL_FILE,
   SMART_CORRECTION_MODEL_URI,
   type SmartCorrectionWorkerMessage,
@@ -60,11 +62,14 @@ parentPort.on('message', (event) => {
         if (controller.signal.aborted) throw controller.signal.reason
         session.resetChatHistory()
         const startedAt = performance.now()
+        const prompt = data.type === 'transform'
+          ? buildTransformationPrompt(data.text, data.instruction, data.targetLanguage)
+          : buildCorrectionPrompt(data.text, {
+              previousText: data.previousText,
+              preferredTerms: data.preferredTerms
+            })
         const raw = await session.prompt(
-          buildCorrectionPrompt(data.text, {
-            previousText: data.previousText,
-            preferredTerms: data.preferredTerms
-          }),
+          prompt,
           {
             temperature: 0,
             maxTokens: Math.min(768, Math.max(64, Math.ceil(data.text.length * 0.65))),
@@ -73,8 +78,13 @@ parentPort.on('message', (event) => {
             trimWhitespaceSuffix: true
           }
         )
-        console.info(`Corrected transcript in ${Math.round(performance.now() - startedAt)} ms`)
-        respond(data.id, sanitizeModelCorrection(raw, data.text))
+        console.info(`Transformed text in ${Math.round(performance.now() - startedAt)} ms`)
+        respond(
+          data.id,
+          data.type === 'transform'
+            ? sanitizeModelTransformation(raw, data.text)
+            : sanitizeModelCorrection(raw, data.text)
+        )
       } catch (error) {
         respond(data.id, undefined, error)
       } finally {

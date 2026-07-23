@@ -1,4 +1,5 @@
 import type { SmartCorrectionStatus } from './contracts'
+import type { TransformationContext } from './types/transformation'
 
 export const SMART_CORRECTION_MODEL_NAME = 'Qwen3.5-0.8B Q8_0'
 export const SMART_CORRECTION_MODEL_FILE = 'Qwen3.5-0.8B-Q8_0.gguf'
@@ -16,6 +17,14 @@ export interface TranscriptCorrector {
   correct(text: string, context?: SmartCorrectionContext): Promise<string>
 }
 
+export interface InstructionTextTransformer {
+  transformText(
+    text: string,
+    instruction: string,
+    context: TransformationContext
+  ): Promise<string>
+}
+
 export type SmartCorrectionWorkerRequest =
   | {
       id: string
@@ -28,6 +37,13 @@ export type SmartCorrectionWorkerRequest =
       text: string
       previousText?: string
       preferredTerms?: string[]
+    }
+  | {
+      id: string
+      type: 'transform'
+      text: string
+      instruction: string
+      targetLanguage?: string
     }
   | {
       id: string
@@ -90,6 +106,7 @@ export function buildCorrectionPrompt(
 export function sanitizeModelCorrection(output: string, original: string): string {
   let result = output
     .replace(/<think>[\s\S]*?<\/think>/giu, '')
+    .trim()
     .replace(/^```(?:text)?\s*/iu, '')
     .replace(/\s*```$/u, '')
     .trim()
@@ -117,6 +134,35 @@ export function sanitizeModelCorrection(output: string, original: string): strin
   if (!result) return original
   const maximumLength = Math.max(original.length * 3, original.length + 240)
   if (result.length > maximumLength) return original
+  return result
+}
+
+export function buildTransformationPrompt(
+  text: string,
+  instruction: string,
+  targetLanguage?: string
+): string {
+  return [
+    `Instruction:\n${cleanPromptValue(instruction).slice(0, 1_000)}`,
+    targetLanguage
+      ? `Target language:\n${cleanPromptValue(targetLanguage).slice(0, 100)}`
+      : '',
+    `Text:\n${cleanPromptValue(text)}`,
+    'Return only the transformed text.'
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function sanitizeModelTransformation(output: string, original: string): string {
+  const result = output
+    .replace(/<think>[\s\S]*?<\/think>/giu, '')
+    .trim()
+    .replace(/^```(?:text|markdown)?\s*/iu, '')
+    .replace(/\s*```$/u, '')
+    .trim()
+  if (!result) return original
+  if (result.length > Math.max(original.length * 8, original.length + 4_000)) return original
   return result
 }
 

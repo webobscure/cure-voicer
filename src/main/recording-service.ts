@@ -13,6 +13,7 @@ import type { TextInsertionService } from '../modules/insertion/insertion-servic
 import type { ActiveApplicationProvider } from '../modules/insertion/ports'
 import type { ActiveApplicationContext, InsertionMode } from '../shared/types/insertion'
 import { randomUUID } from 'node:crypto'
+import type { TransformationRegistry } from '../modules/transformations/transformation-registry'
 
 export class RecordingService {
   private previousTranscript = ''
@@ -22,7 +23,8 @@ export class RecordingService {
     private readonly defaultProviderId: string,
     private readonly transcriptCorrector?: TranscriptCorrector,
     private readonly textInserter?: TextInsertionService,
-    private readonly activeApplications?: ActiveApplicationProvider
+    private readonly activeApplications?: ActiveApplicationProvider,
+    private readonly transformations?: TransformationRegistry
   ) {}
 
   get recordingsDirectory(): string {
@@ -41,6 +43,7 @@ export class RecordingService {
       activeApplication?: ActiveApplicationContext
       insertionMode?: InsertionMode
       blockedApplicationIds?: readonly string[]
+      transformationPresetId?: string
     } = {}
   ): Promise<RecordingResult> {
     if (payload.sampleRate !== 16_000) {
@@ -101,9 +104,31 @@ export class RecordingService {
             return normalizedText
           })
       }
-      const transcript = postProcessTranscript(correctedText, preferredTerms)
+      let transcript = postProcessTranscript(correctedText, preferredTerms)
+      if (
+        transcript &&
+        options.transformationPresetId &&
+        options.transformationPresetId !== 'none' &&
+        this.transformations
+      ) {
+        transcript = await this.transformations
+          .transform(transcript, {
+            operationId: options.operationId ?? randomUUID(),
+            presetId: options.transformationPresetId,
+            activeApplication: options.activeApplication,
+            previousText: this.previousTranscript,
+            preferredTerms,
+            allowExternalService: false,
+            signal: options.signal
+          })
+          .then((result) => result.transformedText)
+          .catch((error) => {
+            console.warn('Default text transformation fallback is being used', error)
+            return transcript
+          })
+      }
       if (transcript) this.previousTranscript = transcript
-      const insertion = await this.insertTranscript(transcript, options)
+      const insertion = await this.insertTranscript(transcript, normalizedText, options)
 
       return {
         recordingPath: keepRecording ? recordingPath : '',
@@ -119,6 +144,7 @@ export class RecordingService {
 
   private async insertTranscript(
     transcript: string,
+    originalText: string,
     options: {
       autoPaste?: boolean
       signal?: AbortSignal
@@ -139,6 +165,7 @@ export class RecordingService {
       operationId: options.operationId ?? randomUUID(),
       requestedMode,
       activeApplication,
+      originalText,
       blockedApplicationIds: options.blockedApplicationIds,
       allowFallback: options.autoPaste !== false,
       signal: options.signal

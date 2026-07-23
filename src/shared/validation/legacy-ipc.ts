@@ -53,6 +53,7 @@ export const legacyPreferencesPatchSchema = z
       'internal-editor'
     ]),
     blockedApplicationIds: z.array(z.string().trim().min(1).max(512)).max(500),
+    transformationPresetId: z.string().trim().min(1).max(100),
     keepRecordings: z.boolean(),
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),

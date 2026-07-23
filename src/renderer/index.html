@@ -48,6 +48,10 @@
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>
             <span>История</span>
           </button>
+          <button class="nav-item" type="button" data-nav="editor">
+            <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg>
+            <span>Редактор</span>
+          </button>
           <button class="nav-item" type="button" data-nav="diagnostics">
             <svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path><circle cx="6" cy="15" r="1"></circle><circle cx="17" cy="6" r="1"></circle></svg>
             <span>Диагностика</span>
@@ -303,6 +307,13 @@
               <div><h2>Диагностика</h2><p>Обезличенное состояние приложения и системных возможностей</p></div>
             </div>
             <div id="diagnosticsReactRoot" class="react-diagnostics-root"></div>
+          </section>
+          <section class="settings-pane" data-pane="editor" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon purple"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg></div>
+              <div><h2>Редактор результата</h2><p>Сравните исходник, исправьте текст и примените локальный пресет</p></div>
+            </div>
+            <div id="editorReactRoot"></div>
           </section>
         </div>
       </section>

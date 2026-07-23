@@ -38,6 +38,13 @@ struct CureVoicerInput {
                 return
             }
             guard CommandLine.arguments.count == 3 else { throw InputError.invalidArguments }
+            if command == "activate" {
+                guard let processId = Int32(CommandLine.arguments[2]) else {
+                    throw InputError.invalidArguments
+                }
+                try activateApplication(processId)
+                return
+            }
             guard
                 let data = Data(base64Encoded: CommandLine.arguments[2]),
                 let text = String(data: data, encoding: .utf8)
@@ -55,6 +62,15 @@ struct CureVoicerInput {
             fputs("\(error.localizedDescription)\n", stderr)
             exit(EXIT_FAILURE)
         }
+    }
+}
+
+private func activateApplication(_ processId: Int32) throws {
+    guard let application = NSRunningApplication(processIdentifier: processId) else {
+        throw InputError.focusedElementUnavailable
+    }
+    if !application.activate() {
+        throw InputError.focusedElementUnavailable
     }
 }
 

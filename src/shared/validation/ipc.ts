@@ -18,3 +18,9 @@ export const textRequestSchema = z.object({
 
 export const booleanRequestSchema = z.object({ value: z.boolean() })
 
+export const transformTextRequestSchema = z.object({
+  text: z.string().max(100_000),
+  presetId: z.string().trim().min(1).max(100),
+  targetLanguage: z.string().trim().min(1).max(100).optional(),
+  customInstruction: z.string().trim().min(1).max(1_000).optional()
+})
