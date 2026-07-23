@@ -30,6 +30,7 @@ export const IPC = {
   smartCorrectionStatusChanged: 'models:smart-correction-status-changed',
   asrStatusChanged: 'models:asr-status-changed',
   internalEditorText: 'editor:open-text',
+  editorCommand: 'editor:command',
   transformText: 'editor:transform-text',
   insertEditorText: 'editor:insert-text',
   settingsNavigate: 'settings:navigate'
@@ -114,6 +115,8 @@ export interface AppPreferences {
   insertionMode: import('./types/insertion').InsertionMode
   blockedApplicationIds: string[]
   transformationPresetId: string
+  shortcutBindings: Record<string, string>
+  voiceCommands: Record<string, { enabled: boolean; phrases: string[] }>
   keepRecordings: boolean
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
@@ -188,6 +191,8 @@ export interface InternalEditorPayload {
   insertionMode: string
 }
 
+export type EditorCommand = 'undo'
+
 export interface CureVoicerApi {
   getAppInfo(): Promise<AppInfo>
   setRecordingState(state: RecordingState): Promise<void>
@@ -221,6 +226,7 @@ export interface CureVoicerApi {
   ): () => void
   onAsrStatusChanged(callback: (status: AsrStatus) => void): () => void
   onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void
+  onEditorCommand(callback: (command: EditorCommand) => void): () => void
   transformText(request: TransformTextRequest): Promise<TransformTextResponse>
   insertEditorText(text: string): Promise<import('./types/insertion').InsertionResult>
   onSettingsNavigate(callback: (pane: string) => void): () => void

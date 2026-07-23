@@ -1,6 +1,7 @@
 import type {
   AppInfo,
   CureVoicerApi,
+  EditorCommand,
   InternalEditorPayload,
   TransformTextRequest,
   TransformTextResponse
@@ -24,9 +25,12 @@ export interface DesktopClient {
   transformText(request: TransformTextRequest): Promise<TransformTextResponse>
   copyText(text: string): Promise<void>
   onInternalEditorText(callback: (payload: InternalEditorPayload) => void): () => void
+  onEditorCommand(callback: (command: EditorCommand) => void): () => void
   getDefaultTransformationPreset(): Promise<string>
   setDefaultTransformationPreset(presetId: string): Promise<void>
   insertEditorText(text: string): Promise<InsertionResult>
+  getPreferences(): Promise<AppInfo['preferences']>
+  updatePreferences(patch: Partial<AppInfo['preferences']>): Promise<AppInfo['preferences']>
 }
 
 export class ElectronDesktopClient implements DesktopClient {
@@ -60,6 +64,10 @@ export class ElectronDesktopClient implements DesktopClient {
     return this.api.onInternalEditorText(callback)
   }
 
+  onEditorCommand(callback: (command: EditorCommand) => void): () => void {
+    return this.api.onEditorCommand(callback)
+  }
+
   async getDefaultTransformationPreset(): Promise<string> {
     return (await this.api.getAppInfo()).preferences.transformationPresetId
   }
@@ -70,5 +78,15 @@ export class ElectronDesktopClient implements DesktopClient {
 
   insertEditorText(text: string): Promise<InsertionResult> {
     return this.api.insertEditorText(text)
+  }
+
+  async getPreferences(): Promise<AppInfo['preferences']> {
+    return (await this.api.getAppInfo()).preferences
+  }
+
+  updatePreferences(
+    patch: Partial<AppInfo['preferences']>
+  ): Promise<AppInfo['preferences']> {
+    return this.api.updatePreferences(patch)
   }
 }

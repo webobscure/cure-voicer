@@ -13,6 +13,7 @@ export interface VoiceCommandActions {
   repeatLastInsertion(context: VoiceCommandContext): Promise<string>
   clearEditor(context: VoiceCommandContext): Promise<void>
   saveNote(context: VoiceCommandContext): Promise<void>
+  undoEditor(context: VoiceCommandContext): Promise<void>
   transformEditor(
     context: VoiceCommandContext,
     presetId: string,
@@ -29,6 +30,10 @@ export function createBuiltInVoiceCommands(actions: VoiceCommandActions): VoiceC
     replacement('repeat-insertion', ['повтори последнюю вставку', 'repeat last insertion'], (context) => actions.repeatLastInsertion(context)),
     action('clear-editor', ['очисти редактор', 'clear editor'], (context) => actions.clearEditor(context), true),
     action('save-note', ['сохрани как заметку', 'save as note'], (context) => actions.saveNote(context)),
+    action('undo-editor', ['отмени изменение', 'undo change'], (context) => actions.undoEditor(context)),
+    replacement('delete-last-word', ['удали последнее слово', 'delete last word'], async (context) =>
+      context.editorText.replace(/(?:\s+)?\S+\s*$/u, '')
+    ),
     transform('shorten', ['сделай текст короче', 'make it shorter'], 'shorten', actions),
     transform('formal', ['сделай формально', 'make it formal'], 'formal', actions),
     transform('translate-en', ['переведи на английский', 'translate to english'], 'translate', actions, 'English')

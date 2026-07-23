@@ -2,7 +2,9 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   globalShortcut,
+  type MessageBoxOptions,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   ipcMain,
@@ -68,6 +70,14 @@ const rendererPolicy = new RendererPolicy({
 const defaultAccelerator = 'CommandOrControl+Shift+Space'
 const defaultHoldKey: HoldKey =
   process.platform === 'darwin' ? 'right-option' : 'right-control'
+const defaultShortcutBindings: Record<string, string> = {
+  'selection.transform': 'CommandOrControl+Shift+R',
+  'editor.open': 'CommandOrControl+Shift+E',
+  'history.open': 'CommandOrControl+Shift+H',
+  'dictation.cancel': 'CommandOrControl+Shift+Backspace',
+  'insertion.repeat': 'CommandOrControl+Shift+I',
+  'dictation.preset': 'CommandOrControl+Shift+P'
+}
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 // Dictation starts from a global key while the settings window is hidden, so
 // Chromium must allow the recorder's AudioContext without a renderer click.
@@ -83,6 +93,7 @@ const {
   applicationActivator,
   selectedText,
   commandUi,
+  voiceCommands,
   recording: recordingService,
   smartCorrection: smartCorrectionService
 } = applicationServices
@@ -103,6 +114,8 @@ let preferences: AppPreferences = {
   insertionMode: 'keyboard',
   blockedApplicationIds: [],
   transformationPresetId: 'none',
+  shortcutBindings: { ...defaultShortcutBindings },
+  voiceCommands: {},
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -155,6 +168,11 @@ commandUi.setListener(async (event, text) => {
     })
     return
   }
+  if (event === 'undo-editor') {
+    showWindow('editor')
+    mainWindow?.webContents.send(IPC.editorCommand, 'undo')
+    return
+  }
   if (!text) return
   const note: DictationHistoryItem = {
     id: randomUUID(),
@@ -169,6 +187,24 @@ commandUi.setListener(async (event, text) => {
     ...history
   ].slice(0, 100)
   await saveAppState()
+})
+commandUi.setConfirmationListener(async (commandId) => {
+  const options: MessageBoxOptions = {
+    type: 'warning',
+    buttons: ['Отмена', 'Выполнить'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: 'Подтверждение голосовой команды',
+    message:
+      commandId === 'clear-editor'
+        ? 'Очистить текст во встроенном редакторе?'
+        : 'Выполнить потенциально опасную команду?'
+  }
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options)
+  return result.response === 1
 })
 
 interface PersistedAppState {
@@ -521,6 +557,7 @@ function registerIpc(): void {
     async (event, patch: Partial<AppPreferences>) => {
       assertSettingsSender(event)
       preferences = await applyPreferencePatch(legacyPreferencesPatchSchema.parse(patch))
+      applyVoiceCommandPreferences()
       await saveAppState()
       overlayWindow?.webContents.send(IPC.overlayPreferencesChanged, preferences)
       updateOverlayState(currentState)
@@ -893,7 +930,7 @@ function configureRecordingActivation(nextPreferences: AppPreferences): void {
       process.platform === 'darwin' &&
       !systemPreferences.isTrustedAccessibilityClient(false)
     ) {
-      registerSecondaryShortcuts()
+      registerSecondaryShortcuts(nextPreferences)
       return
     }
     activeHoldKeyCode = holdKeyCode(nextPreferences.holdKey)
@@ -901,27 +938,64 @@ function configureRecordingActivation(nextPreferences: AppPreferences): void {
     uIOhook.on('keyup', handleGlobalKeyUp)
     uIOhook.start()
     keyboardHookRunning = true
-    registerSecondaryShortcuts()
+    registerSecondaryShortcuts(nextPreferences)
     return
   }
 
   if (!globalShortcut.register(nextPreferences.accelerator, requestRecordingToggle)) {
     throw new Error('Эта горячая клавиша уже занята другой программой')
   }
-  registerSecondaryShortcuts()
+  registerSecondaryShortcuts(nextPreferences)
 }
 
-function registerSecondaryShortcuts(): void {
-  registerOptionalShortcut('CommandOrControl+Shift+R', () => {
-    void processSelectedText().catch((error) => {
-      console.warn('Selected text processing failed', error)
-    })
+function registerSecondaryShortcuts(nextPreferences: AppPreferences): void {
+  const actions: Record<string, () => void> = {
+    'selection.transform': () => {
+      void processSelectedText().catch((error) => {
+        console.warn('Selected text processing failed', error)
+      })
+    },
+    'editor.open': () => showWindow('editor'),
+    'history.open': () => showWindow('history'),
+    'dictation.cancel': () => cancelActiveDictation('shortcut'),
+    'insertion.repeat': () => {
+      void repeatLastInsertion().catch((error) => {
+        console.warn('Could not repeat the last insertion', error)
+      })
+    },
+    'dictation.preset': () => sendRecordingCommand('start')
+  }
+  for (const [actionId, accelerator] of Object.entries(nextPreferences.shortcutBindings)) {
+    const callback = actions[actionId]
+    if (callback && accelerator) registerOptionalShortcut(accelerator, callback)
+  }
+}
+
+async function repeatLastInsertion(): Promise<void> {
+  const text = history.find((item) => item.text.trim())?.text
+  if (!text) throw new Error('There is no previous text to insert')
+  const activeApplication = await activeApplications.getActiveApplication()
+  await insertion.insertText(text, {
+    operationId: randomUUID(),
+    requestedMode:
+      preferences.insertionMode === 'internal-editor'
+        ? 'keyboard'
+        : preferences.insertionMode,
+    activeApplication,
+    originalText: text,
+    blockedApplicationIds: preferences.blockedApplicationIds,
+    allowFallback: true
   })
-  registerOptionalShortcut('CommandOrControl+Shift+E', () => showWindow('editor'))
-  registerOptionalShortcut('CommandOrControl+Shift+H', () => showWindow('history'))
-  registerOptionalShortcut('CommandOrControl+Shift+Backspace', () => {
-    cancelActiveDictation('shortcut')
-  })
+}
+
+function applyVoiceCommandPreferences(): void {
+  for (const [commandId, configuration] of Object.entries(preferences.voiceCommands)) {
+    try {
+      voiceCommands.configure(commandId, configuration)
+    } catch (error) {
+      console.warn(`Ignored unknown voice command preference: ${commandId}`, error)
+    }
+  }
 }
 
 function registerOptionalShortcut(accelerator: string, callback: () => void): void {
@@ -1197,6 +1271,12 @@ async function loadAppState(): Promise<void> {
           stored.transformationPresetId.length <= 100
             ? stored.transformationPresetId
             : 'none',
+        shortcutBindings: isStringRecord(stored.shortcutBindings)
+          ? { ...defaultShortcutBindings, ...stored.shortcutBindings }
+          : { ...defaultShortcutBindings },
+        voiceCommands: isVoiceCommandPreferences(stored.voiceCommands)
+          ? stored.voiceCommands
+          : {},
         keepRecordings:
           typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
@@ -1303,6 +1383,12 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   if (patch.transformationPresetId !== undefined) {
     next.transformationPresetId = patch.transformationPresetId
   }
+  if (patch.shortcutBindings !== undefined) {
+    next.shortcutBindings = patch.shortcutBindings
+  }
+  if (patch.voiceCommands !== undefined) {
+    next.voiceCommands = patch.voiceCommands
+  }
   if (patch.autoStopSilenceMs !== undefined) {
     if (
       !Number.isInteger(patch.autoStopSilenceMs) ||
@@ -1321,7 +1407,8 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   const activationChanged =
     next.activationMode !== preferences.activationMode ||
     next.accelerator !== preferences.accelerator ||
-    next.holdKey !== preferences.holdKey
+    next.holdKey !== preferences.holdKey ||
+    next.shortcutBindings !== preferences.shortcutBindings
   if (activationChanged && next.onboardingCompleted && !hotkeyCaptureActive) {
     try {
       configureRecordingActivation(next)
@@ -1331,6 +1418,35 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
     }
   }
   return next
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    Object.entries(value).every(
+      ([key, entry]) => key.length <= 100 && typeof entry === 'string' && entry.length <= 100
+    )
+  )
+}
+
+function isVoiceCommandPreferences(
+  value: unknown
+): value is AppPreferences['voiceCommands'] {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    Object.values(value).every(
+      (entry) =>
+        entry &&
+        typeof entry === 'object' &&
+        'enabled' in entry &&
+        typeof entry.enabled === 'boolean' &&
+        'phrases' in entry &&
+        Array.isArray(entry.phrases) &&
+        entry.phrases.every((phrase: unknown) => typeof phrase === 'string')
+    )
+  )
 }
 
 function isSupportedAccelerator(value: unknown): value is string {
@@ -1466,6 +1582,7 @@ registerApplicationLifecycle({
     if (process.platform === 'win32') app.setAppUserModelId('com.curevoicer.desktop')
     if (process.platform === 'darwin') app.dock?.hide()
     await loadAppState()
+    applyVoiceCommandPreferences()
 
     session.defaultSession.setPermissionRequestHandler(
       (webContents, permission, callback, details) => {

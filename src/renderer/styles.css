@@ -859,3 +859,40 @@ body[data-state='recording'] .level-meter span { background: #ff453a; }
 .editor-compare textarea { min-height: 280px; resize: vertical; border: 1px solid var(--line); border-radius: 16px; padding: 15px; background: rgba(255, 255, 255, .62); color: var(--primary); font: 14px/1.55 system-ui, sans-serif; }
 .editor-find span { margin-left: auto; color: var(--secondary); font-size: 12px; }
 @media (max-width: 820px) { .editor-compare { grid-template-columns: 1fr; } }
+
+/* Voice command and shortcut settings */
+.command-settings-list { display: grid; gap: 10px; }
+.command-setting-card {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(240px, 1.2fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: .5px solid var(--separator);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.command-setting-copy strong, .command-setting-copy span { display: block; }
+.command-setting-copy strong { color: var(--label); font-size: 13px; }
+.command-setting-copy span { margin-top: 4px; color: var(--secondary); font-size: 10px; }
+.command-setting-card textarea,
+.command-setting-card > input {
+  width: 100%;
+  box-sizing: border-box;
+  border: .5px solid var(--separator);
+  border-radius: 11px;
+  color: var(--label);
+  background: var(--control);
+  outline: none;
+  font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.command-setting-card textarea { min-height: 58px; resize: vertical; padding: 9px 11px; }
+.command-setting-card > input { min-height: 38px; padding: 0 11px; }
+.command-setting-card textarea:focus,
+.command-setting-card > input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10, 132, 255, .13); }
+.command-settings-list > .inline-message { min-height: 18px; margin: 2px 4px; color: var(--secondary); font-size: 11px; }
+@media (max-width: 900px) {
+  .command-setting-card { grid-template-columns: 1fr auto; }
+  .command-setting-card textarea, .command-setting-card > input { grid-column: 1 / -1; grid-row: 2; }
+}

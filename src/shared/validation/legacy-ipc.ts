@@ -54,6 +54,14 @@ export const legacyPreferencesPatchSchema = z
     ]),
     blockedApplicationIds: z.array(z.string().trim().min(1).max(512)).max(500),
     transformationPresetId: z.string().trim().min(1).max(100),
+    shortcutBindings: z.record(z.string().max(100), z.string().max(100)),
+    voiceCommands: z.record(
+      z.string().max(100),
+      z.object({
+        enabled: z.boolean(),
+        phrases: z.array(z.string().trim().min(1).max(100)).max(20)
+      })
+    ),
     keepRecordings: z.boolean(),
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),

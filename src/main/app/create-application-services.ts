@@ -96,6 +96,7 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
       repeatLastInsertion: async (context) => context.editorText,
       clearEditor: async (context) => commandUi.dispatch('clear-editor', context.editorText),
       saveNote: async (context) => commandUi.dispatch('save-note', context.editorText),
+      undoEditor: async (context) => commandUi.dispatch('undo-editor', context.editorText),
       transformEditor: async (context, presetId, targetLanguage) =>
         transformations
           .transform(context.editorText, {
@@ -131,7 +132,8 @@ export function createApplicationServices(mainDirectory: string): ApplicationSer
       insertion,
       activeApplications,
       transformations,
-      voiceCommands
+      voiceCommands,
+      (commandId) => commandUi.confirm(commandId)
     )
   }
 }

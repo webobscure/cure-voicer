@@ -52,6 +52,14 @@
             <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg>
             <span>Редактор</span>
           </button>
+          <button class="nav-item" type="button" data-nav="commands">
+            <svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V7a6 6 0 0 0-12 0zM4 10a8 8 0 0 0 16 0M12 18v3M9 21h6"></path></svg>
+            <span>Команды</span>
+          </button>
+          <button class="nav-item" type="button" data-nav="hotkeys">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M7 9h2M11 9h2M15 9h2M7 13h10"></path></svg>
+            <span>Горячие клавиши</span>
+          </button>
           <button class="nav-item" type="button" data-nav="diagnostics">
             <svg viewBox="0 0 24 24"><path d="M4 18h16M6 15l3-4 3 2 5-7 2 2"></path><circle cx="6" cy="15" r="1"></circle><circle cx="17" cy="6" r="1"></circle></svg>
             <span>Диагностика</span>
@@ -314,6 +322,20 @@
               <div><h2>Редактор результата</h2><p>Сравните исходник, исправьте текст и примените локальный пресет</p></div>
             </div>
             <div id="editorReactRoot"></div>
+          </section>
+          <section class="settings-pane" data-pane="commands" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon cyan"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V7a6 6 0 0 0-12 0zM4 10a8 8 0 0 0 16 0M12 18v3M9 21h6"></path></svg></div>
+              <div><h2>Голосовые команды</h2><p>Команда выполняется только при полном совпадении фразы</p></div>
+            </div>
+            <div id="commandsReactRoot"></div>
+          </section>
+          <section class="settings-pane" data-pane="hotkeys" hidden>
+            <div class="section-intro">
+              <div class="empty-pane-icon orange"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M7 9h2M11 9h2M15 9h2M7 13h10"></path></svg></div>
+              <div><h2>Горячие клавиши</h2><p>Отдельные действия работают глобально в macOS и Windows</p></div>
+            </div>
+            <div id="hotkeysReactRoot"></div>
           </section>
         </div>
       </section>

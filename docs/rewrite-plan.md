@@ -177,17 +177,23 @@ the edited text.
 
 ## Stage 5 — commands, selection and shortcuts
 
-Status: **in progress**
+Status: **completed on 2026-07-23**
 
 - [x] Define `VoiceCommand`, registry, editable aliases and enable/disable configuration.
 - [x] Add conservative command-intent detection and dangerous-action confirmation.
-- [ ] Connect newline/paragraph/punctuation/edit/insert/copy/transform/settings/
+- [x] Connect newline/paragraph/punctuation/edit/insert/copy/transform/settings/
       repeat/clear/note commands and undo.
 - [x] Add selected-text acquisition/replacement with safe clipboard rollback and a
       global transformation shortcut.
-- [ ] Replace remaining shortcut globals with action IDs and persisted preset bindings.
+- [x] Replace secondary shortcut globals with action IDs and persisted preset bindings.
 - [x] Add command false-positive, confirmation, shortcut-conflict and selection
       failure tests.
+
+The hold-to-talk hook remains a dedicated low-level input path because Electron's
+global shortcut API has no key-up event. All other global actions now have stable
+IDs and persisted bindings. Dangerous commands are executed only after a native
+confirmation dialog; command phrases are exact-match by default and can be edited
+or disabled in settings.
 
 ## Stage 6 — active application integrations
 

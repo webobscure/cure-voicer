@@ -10,7 +10,8 @@ import type {
   PcmRecordingPayload,
   RecordingState,
   SmartCorrectionStatus,
-  InternalEditorPayload
+  InternalEditorPayload,
+  EditorCommand
 } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
 
@@ -103,6 +104,12 @@ const api: CureVoicerApi = {
       callback(payload)
     ipcRenderer.on(IPC.internalEditorText, listener)
     return () => ipcRenderer.removeListener(IPC.internalEditorText, listener)
+  },
+  onEditorCommand: (callback: (command: EditorCommand) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, command: EditorCommand): void =>
+      callback(command)
+    ipcRenderer.on(IPC.editorCommand, listener)
+    return () => ipcRenderer.removeListener(IPC.editorCommand, listener)
   },
   transformText: (request) => ipcRenderer.invoke(IPC.transformText, request),
   insertEditorText: (text) => ipcRenderer.invoke(IPC.insertEditorText, { text }),

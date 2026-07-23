@@ -132,6 +132,15 @@ let preferences: AppPreferences = {
   insertionMode: 'keyboard',
   blockedApplicationIds: [],
   transformationPresetId: 'none',
+  shortcutBindings: {
+    'selection.transform': 'CommandOrControl+Shift+R',
+    'editor.open': 'CommandOrControl+Shift+E',
+    'history.open': 'CommandOrControl+Shift+H',
+    'dictation.cancel': 'CommandOrControl+Shift+Backspace',
+    'insertion.repeat': 'CommandOrControl+Shift+I',
+    'dictation.preset': 'CommandOrControl+Shift+P'
+  },
+  voiceCommands: {},
   keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
@@ -388,6 +397,8 @@ const paneCopy: Record<string, [string, string]> = {
   vocabulary: ['Словарь', 'Имена и термины для более точной диктовки'],
   history: ['История', 'Недавние локальные диктовки'],
   editor: ['Редактор', 'Сравнение, ручная правка и локальная обработка'],
+  commands: ['Голосовые команды', 'Фразы активации, включение и защита команд'],
+  hotkeys: ['Горячие клавиши', 'Глобальные действия и проверка конфликтов'],
   diagnostics: ['Диагностика', 'Разрешения, сервисы и безопасный отчёт']
 }
 

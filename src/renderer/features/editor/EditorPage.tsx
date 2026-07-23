@@ -63,6 +63,17 @@ export function EditorPage({ client }: { client: DesktopClient }): React.JSX.Ele
     void client.getDefaultTransformationPreset().then(setPresetId)
   }, [client])
 
+  useEffect(
+    () =>
+      client.onEditorCommand((command) => {
+        if (command === 'undo') {
+          applySnapshot(documentRef.current.undo())
+          setStatus('Последнее изменение отменено голосовой командой')
+        }
+      }),
+    [client]
+  )
+
   const applySnapshot = (snapshot: EditorDocumentSnapshot): void => {
     setDocument(snapshot)
     setDraft(snapshot.currentText)

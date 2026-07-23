@@ -26,7 +26,8 @@ export class RecordingService {
     private readonly textInserter?: TextInsertionService,
     private readonly activeApplications?: ActiveApplicationProvider,
     private readonly transformations?: TransformationRegistry,
-    private readonly voiceCommands?: VoiceCommandRegistry
+    private readonly voiceCommands?: VoiceCommandRegistry,
+    private readonly confirmVoiceCommand?: (commandId: string) => Promise<boolean>
   ) {}
 
   get recordingsDirectory(): string {
@@ -110,13 +111,23 @@ export class RecordingService {
       if (transcript && this.voiceCommands) {
         const match = this.voiceCommands.detect(transcript)
         if (match) {
-          const command = await this.voiceCommands.execute(match, {
+          const commandContext = {
             operationId: options.operationId ?? randomUUID(),
             transcript,
             editorText: this.previousTranscript,
             activeApplication: options.activeApplication,
             signal: options.signal
-          })
+          }
+          let command = await this.voiceCommands.execute(match, commandContext)
+          if (command.requiresConfirmation && this.confirmVoiceCommand) {
+            const confirmed = await this.confirmVoiceCommand(command.commandId)
+            if (confirmed) {
+              command = await this.voiceCommands.execute(match, {
+                ...commandContext,
+                confirmed: true
+              })
+            }
+          }
           if (command.requiresConfirmation || !command.handled) {
             return {
               recordingPath: keepRecording ? recordingPath : '',
