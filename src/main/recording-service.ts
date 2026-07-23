@@ -6,16 +6,17 @@ import {
   shouldRunContextualCorrection,
   type TranscriptCorrector
 } from '../shared/smart-correction'
-import type { AsrEngine } from './asr/types'
 import { encodeFloat32PcmAsWav, float32FromBytes } from './audio/wav'
 import { TextInserter } from './text-inserter'
 import { postProcessTranscript } from '../shared/transcript-postprocessor'
+import type { SpeechRecognitionProviderRegistry } from '../modules/transcription/provider-registry'
 
 export class RecordingService {
   private previousTranscript = ''
 
   constructor(
-    private readonly asrEngine: AsrEngine,
+    private readonly transcriptionProviders: SpeechRecognitionProviderRegistry,
+    private readonly defaultProviderId: string,
     private readonly transcriptCorrector?: TranscriptCorrector,
     private readonly textInserter = new TextInserter()
   ) {}
@@ -31,6 +32,7 @@ export class RecordingService {
       keepRecording?: boolean
       preferredTerms?: string[]
       smartCorrectionEnabled?: boolean
+      signal?: AbortSignal
     } = {}
   ): Promise<RecordingResult> {
     if (payload.sampleRate !== 16_000) {
@@ -45,7 +47,7 @@ export class RecordingService {
       return {
         recordingPath: '',
         transcript: '',
-        engine: this.asrEngine.id,
+        engine: this.defaultProviderId,
         latencyMs: 0,
         insertion: 'skipped'
       }
@@ -57,9 +59,22 @@ export class RecordingService {
     await writeFile(recordingPath, encodeFloat32PcmAsWav(samples, payload.sampleRate))
 
     const startedAt = performance.now()
-    const keepRecording = options.keepRecording ?? true
+    const keepRecording = options.keepRecording ?? false
     try {
-      const result = await this.asrEngine.transcribe(recordingPath)
+      const result = await this.transcriptionProviders.transcribe(
+        {
+          kind: 'wav-file',
+          path: recordingPath,
+          durationMs: payload.durationMs,
+          sampleRate: payload.sampleRate
+        },
+        {
+          detectLanguage: true,
+          preferredTerms: options.preferredTerms ?? [],
+          signal: options.signal
+        },
+        this.defaultProviderId
+      )
       const preferredTerms = options.preferredTerms ?? []
       const normalizedText = postProcessTranscript(result.text, preferredTerms)
       let correctedText = normalizedText
@@ -85,7 +100,7 @@ export class RecordingService {
       return {
         recordingPath: keepRecording ? recordingPath : '',
         transcript,
-        engine: this.asrEngine.id,
+        engine: result.providerId,
         latencyMs: Math.round(performance.now() - startedAt),
         insertion
       }

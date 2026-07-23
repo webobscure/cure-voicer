@@ -11,6 +11,7 @@ import type {
   SmartCorrectionStatus
 } from '../shared/contracts'
 import { AudioRecorder } from './audio-recorder'
+import { SilenceDetector } from '../modules/dictation/silence-detector'
 import { mountReactFeatures } from './app/bootstrap'
 import brandLogoUrl from '../../assets/branding/cure-voicer-liquid-glass-logo.png'
 
@@ -43,6 +44,7 @@ const holdKeyButtonLabel = getElement('holdKeyButtonLabel')
 const holdKeyHint = getElement('holdKeyHint')
 const hotkeySelect = getElement<HTMLSelectElement>('hotkeySelect')
 const microphoneSelect = getElement<HTMLSelectElement>('microphoneSelect')
+const autoStopSilenceSelect = getElement<HTMLSelectElement>('autoStopSilenceSelect')
 const autoPasteToggle = getElement<HTMLInputElement>('autoPasteToggle')
 const launchAtLoginToggle = getElement<HTMLInputElement>('launchAtLoginToggle')
 const showOverlayToggle = getElement<HTMLInputElement>('showOverlayToggle')
@@ -110,6 +112,7 @@ let recordingTimer: number | null = null
 let lastAudioLevelSentAt = 0
 let stopRequestedWhileStarting = false
 let recordingStartInProgress = false
+let activeDictationSessionId: string | null = null
 let appPlatform: NodeJS.Platform = 'darwin'
 let globalInputAvailable = true
 let isCapturingHoldKey = false
@@ -125,10 +128,11 @@ let preferences: AppPreferences = {
   holdKey: 'right-option',
   microphoneId: '',
   autoPaste: true,
-  keepRecordings: true,
+  keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
   smartCorrectionEnabled: false,
+  autoStopSilenceMs: 0,
   onboardingCompleted: false
 }
 let smartCorrectionStatus: SmartCorrectionStatus = {
@@ -147,6 +151,9 @@ let asrStatus: AsrStatus = {
 let vocabulary: string[] = []
 let history: DictationHistoryItem[] = []
 const recorder = new AudioRecorder(updateLevel)
+const silenceDetector = new SilenceDetector(() => {
+  if (state === 'recording') void finishRecording()
+})
 
 async function setState(nextState: RecordingState): Promise<void> {
   state = nextState
@@ -194,8 +201,15 @@ async function startRecording(): Promise<void> {
   try {
     stopRequestedWhileStarting = false
     recordingStartInProgress = true
+    activeDictationSessionId = crypto.randomUUID()
+    await api?.beginDictation(activeDictationSessionId)
     await setState('starting')
-    await recorder.start(preferences.microphoneId)
+    silenceDetector.reset({ silenceMs: preferences.autoStopSilenceMs })
+    await recorder.start({
+      sessionId: activeDictationSessionId,
+      deviceId: preferences.microphoneId,
+      maxDurationMs: 15 * 60_000
+    })
     recordingStartedAt = performance.now()
     resultText.textContent = 'Идёт запись…'
     resultPath.textContent = ''
@@ -229,6 +243,7 @@ async function handleRecordingCommand(command: 'toggle' | 'start' | 'stop'): Pro
 }
 
 async function finishRecording(): Promise<void> {
+  const finishingSessionId = activeDictationSessionId
   try {
     stopRecordingTimer()
     await setState('transcribing')
@@ -240,16 +255,21 @@ async function finishRecording(): Promise<void> {
         'Запись слишком короткая. Подержите клавишу чуть дольше и произнесите фразу.'
       resultPath.textContent = ''
       await setState('idle')
+      activeDictationSessionId = null
       return
     }
 
     const bytes = new Uint8Array(samples.buffer.slice(0))
     if (!api) throw new Error('Electron API is unavailable in preview mode')
+    const sessionId = finishingSessionId
+    if (!sessionId) throw new Error('Dictation session is unavailable')
     const result = await api.finishRecording({
+      sessionId,
       samples: bytes,
       sampleRate: 16_000,
       durationMs
     })
+    if (activeDictationSessionId !== sessionId) return
 
     if (result.transcript) {
       resultText.textContent = result.transcript
@@ -278,9 +298,22 @@ async function finishRecording(): Promise<void> {
       renderHistory()
     }
     await setState('idle')
+    activeDictationSessionId = null
   } catch (error) {
+    if (activeDictationSessionId !== finishingSessionId) return
     showError(error)
   }
+}
+
+async function cancelRecording(): Promise<void> {
+  stopRequestedWhileStarting = false
+  stopRecordingTimer()
+  await recorder.cancel()
+  await api?.cancelDictation()
+  activeDictationSessionId = null
+  resultText.textContent = 'Диктовка отменена'
+  resultPath.textContent = ''
+  await setState('idle')
 }
 
 function showError(error: unknown): void {
@@ -328,6 +361,7 @@ function stopRecordingTimer(): void {
 }
 
 function updateLevel(level: number): void {
+  silenceDetector.observe(level)
   const activeBars = Math.round(level * levelBars.length)
   levelBars.forEach((bar, index) => {
     const distance = Math.abs(index - Math.floor(levelBars.length / 2))
@@ -407,6 +441,7 @@ function renderPreferences(): void {
   }
   hotkeySelect.disabled = preferences.activationMode !== 'toggle'
   microphoneSelect.value = preferences.microphoneId
+  autoStopSilenceSelect.value = String(preferences.autoStopSilenceMs)
   autoPasteToggle.checked = preferences.autoPaste
   launchAtLoginToggle.checked = preferences.launchAtLogin
   showOverlayToggle.checked = preferences.showOverlayWhenIdle
@@ -960,16 +995,27 @@ holdKeyButton.addEventListener('click', () => void beginHoldKeyCapture())
 window.addEventListener(
   'keydown',
   (event) => {
-    if (!isCapturingHoldKey) return
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    if (event.code === 'Escape') {
-      void cancelHoldKeyCapture()
+    if (isCapturingHoldKey) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (event.code === 'Escape') {
+        void cancelHoldKeyCapture()
+        return
+      }
+      const key = holdKeyFromCode(event.code)
+      if (key) void finishHoldKeyCapture(key)
+      else holdKeyHint.textContent = 'Эта клавиша не подходит. Используйте модификатор или F6–F12.'
       return
     }
-    const key = holdKeyFromCode(event.code)
-    if (key) void finishHoldKeyCapture(key)
-    else holdKeyHint.textContent = 'Эта клавиша не подходит. Используйте модификатор или F6–F12.'
+
+    if (
+      event.code === 'Escape' &&
+      (state === 'starting' || state === 'recording' || state === 'transcribing')
+    ) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      void cancelRecording().catch(showError)
+    }
   },
   true
 )
@@ -979,6 +1025,9 @@ hotkeySelect.addEventListener('change', () =>
 )
 microphoneSelect.addEventListener('change', () =>
   void updatePreferences({ microphoneId: microphoneSelect.value })
+)
+autoStopSilenceSelect.addEventListener('change', () =>
+  void updatePreferences({ autoStopSilenceMs: Number(autoStopSilenceSelect.value) })
 )
 autoPasteToggle.addEventListener('change', () =>
   void updatePreferences({ autoPaste: autoPasteToggle.checked })

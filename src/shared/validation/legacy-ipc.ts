@@ -49,6 +49,7 @@ export const legacyPreferencesPatchSchema = z
     showOverlayWhenIdle: z.boolean(),
     overlayMotion: z.enum(['calm', 'balanced', 'expressive']),
     smartCorrectionEnabled: z.boolean(),
+    autoStopSilenceMs: z.number().int().min(0).max(30_000),
     onboardingCompleted: z.boolean()
   })
   .strict()
@@ -57,6 +58,7 @@ export const legacyPreferencesPatchSchema = z
 const maximumRecordingBytes = 16_000 * Float32Array.BYTES_PER_ELEMENT * 60 * 15
 
 export const pcmRecordingPayloadSchema = z.object({
+  sessionId: z.uuid(),
   samples: z
     .custom<Uint8Array>((value) => value instanceof Uint8Array)
     .refine((samples) => samples.byteLength > 0, 'Recording is empty')
@@ -73,3 +75,4 @@ export const booleanValueSchema = z.boolean()
 export const vocabularyTermSchema = z.string().max(200)
 export const historyIdSchema = z.string().min(1).max(100)
 export const copyTextSchema = z.string().max(100_000)
+export const dictationSessionIdSchema = z.uuid()

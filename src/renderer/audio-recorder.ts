@@ -1,20 +1,32 @@
+import { PcmCaptureSession } from '../modules/dictation/audio-capture-port'
+import type {
+  AudioCapturePort,
+  MicrophoneCaptureOptions
+} from '../modules/dictation/audio-capture-port'
+
 const TARGET_SAMPLE_RATE = 16_000
 const MICROPHONE_TIMEOUT_MS = 8_000
 const AUDIO_CONTEXT_TIMEOUT_MS = 5_000
 
-export class AudioRecorder {
+export class AudioRecorder implements AudioCapturePort {
   private context: AudioContext | null = null
   private stream: MediaStream | null = null
   private source: MediaStreamAudioSourceNode | null = null
   private worklet: AudioWorkletNode | null = null
   private silentOutput: GainNode | null = null
-  private chunks: Float32Array[] = []
   private sourceSampleRate = TARGET_SAMPLE_RATE
+  private captureSession: PcmCaptureSession | null = null
+  private recordingError: Error | null = null
+  private generation = 0
+  private starting = false
 
   constructor(private readonly onLevel: (level: number) => void) {}
 
-  async start(deviceId = ''): Promise<void> {
-    if (this.context) throw new Error('Recorder is already running')
+  async start(options: MicrophoneCaptureOptions): Promise<void> {
+    if (this.context || this.starting) throw new Error('Recorder is already running')
+    this.starting = true
+    const generation = ++this.generation
+    const { deviceId, maxDurationMs, sessionId } = options
 
     try {
       let microphoneRequestTimedOut = false
@@ -36,11 +48,13 @@ export class AudioRecorder {
         () => undefined
       )
       try {
-        this.stream = await withTimeout(
+        const stream = await withTimeout(
           microphoneRequest,
           MICROPHONE_TIMEOUT_MS,
           'Микрофон не ответил. Проверьте разрешение в системных настройках.'
         )
+        this.stream = stream
+        this.assertGeneration(generation)
       } catch (error) {
         microphoneRequestTimedOut = true
         throw error
@@ -48,6 +62,11 @@ export class AudioRecorder {
 
       this.context = new AudioContext({ latencyHint: 'interactive' })
       this.sourceSampleRate = this.context.sampleRate
+      this.captureSession = new PcmCaptureSession(
+        sessionId,
+        Math.ceil(this.sourceSampleRate * (maxDurationMs / 1_000))
+      )
+      this.recordingError = null
       if (this.context.state === 'suspended') {
         await withTimeout(
           this.context.resume(),
@@ -55,6 +74,7 @@ export class AudioRecorder {
           'Не удалось активировать аудиосистему.'
         )
       }
+      this.assertGeneration(generation)
       await withTimeout(
         this.context.audioWorklet.addModule(
           new URL('./audio-recorder-worklet.js', window.location.href).toString()
@@ -62,16 +82,21 @@ export class AudioRecorder {
         AUDIO_CONTEXT_TIMEOUT_MS,
         'Не удалось запустить обработку аудио.'
       )
+      this.assertGeneration(generation)
 
       this.source = this.context.createMediaStreamSource(this.stream)
       this.worklet = new AudioWorkletNode(this.context, 'cure-voicer-recorder')
       this.silentOutput = this.context.createGain()
       this.silentOutput.gain.value = 0
-      this.chunks = []
-
       this.worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
         const samples = new Float32Array(event.data)
-        this.chunks.push(samples)
+        try {
+          this.captureSession?.append(samples)
+        } catch (error) {
+          this.recordingError =
+            error instanceof Error ? error : new Error('Audio capture failed')
+          return
+        }
         this.onLevel(calculateRms(samples))
       }
 
@@ -81,13 +106,17 @@ export class AudioRecorder {
     } catch (error) {
       await this.releaseResources()
       throw error
+    } finally {
+      this.starting = false
     }
   }
 
   async stop(): Promise<Float32Array> {
     if (!this.context) throw new Error('Recorder is not running')
 
-    const sourceSamples = concatenate(this.chunks)
+    const recordingError = this.recordingError
+
+    const sourceSamples = this.captureSession?.finish() ?? new Float32Array()
     const result = resampleLinear(
       sourceSamples,
       this.sourceSampleRate,
@@ -95,7 +124,27 @@ export class AudioRecorder {
     )
 
     await this.releaseResources()
+    if (recordingError) throw recordingError
     return result
+  }
+
+  async pause(): Promise<void> {
+    if (!this.context) throw new Error('Recorder is not running')
+    if (this.context.state === 'running') await this.context.suspend()
+  }
+
+  async resume(): Promise<void> {
+    if (!this.context) throw new Error('Recorder is not running')
+    if (this.context.state === 'suspended') await this.context.resume()
+  }
+
+  async cancel(): Promise<void> {
+    this.generation += 1
+    await this.releaseResources()
+  }
+
+  private assertGeneration(generation: number): void {
+    if (generation !== this.generation) throw new Error('Audio capture was cancelled')
   }
 
   private async releaseResources(): Promise<void> {
@@ -110,7 +159,9 @@ export class AudioRecorder {
     this.source = null
     this.worklet = null
     this.silentOutput = null
-    this.chunks = []
+    this.captureSession?.cancel()
+    this.captureSession = null
+    this.recordingError = null
     this.onLevel(0)
   }
 }
@@ -129,19 +180,6 @@ async function withTimeout<T>(
   } finally {
     if (timer) clearTimeout(timer)
   }
-}
-
-function concatenate(chunks: Float32Array[]): Float32Array {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const result = new Float32Array(length)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset)
-    offset += chunk.length
-  }
-
-  return result
 }
 
 export function resampleLinear(

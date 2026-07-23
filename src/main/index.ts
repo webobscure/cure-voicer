@@ -36,10 +36,13 @@ import { createApplicationServices } from './app/create-application-services'
 import type { RecordingService } from './recording-service'
 import { registerApplicationLifecycle } from './app/application-lifecycle'
 import { hardenWindow, RendererPolicy } from './security/renderer-policy'
+import type { DictationSnapshot, DictationState } from '../shared/types/dictation'
+import type { InsertionResult } from '../shared/types/insertion'
 import {
   audioLevelSchema,
   booleanValueSchema,
   copyTextSchema,
+  dictationSessionIdSchema,
   historyIdSchema,
   legacyPreferencesPatchSchema,
   overlayPlacementModeSchema,
@@ -68,8 +71,12 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 // Chromium must allow the recorder's AudioContext without a renderer click.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 const applicationServices = createApplicationServices(currentDirectory)
-const { asrEngine, recording: recordingService, smartCorrection: smartCorrectionService } =
-  applicationServices
+const {
+  asrEngine,
+  dictation: dictationMachine,
+  recording: recordingService,
+  smartCorrection: smartCorrectionService
+} = applicationServices
 
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -84,10 +91,11 @@ let preferences: AppPreferences = {
   holdKey: defaultHoldKey,
   microphoneId: '',
   autoPaste: true,
-  keepRecordings: true,
+  keepRecordings: false,
   showOverlayWhenIdle: true,
   overlayMotion: 'balanced',
   smartCorrectionEnabled: false,
+  autoStopSilenceMs: 0,
   onboardingCompleted: false
 }
 let vocabulary: string[] = []
@@ -99,12 +107,15 @@ let overlayMoveSaveTimer: ReturnType<typeof setTimeout> | null = null
 let overlayDragTimer: ReturnType<typeof setInterval> | null = null
 let overlayDragSafetyTimer: ReturnType<typeof setTimeout> | null = null
 let activeRecordingFinish: ReturnType<RecordingService['finish']> | null = null
+let activeRecordingAbortController: AbortController | null = null
 let overlayHiddenUntilRecording = false
 let keyboardHookRunning = false
 let holdKeyPressed = false
 let activeHoldKeyCode: number = UiohookKey.CtrlRight
 let hotkeyCaptureActive = false
 let hotkeyCaptureSafetyTimer: ReturnType<typeof setTimeout> | null = null
+
+dictationMachine.subscribe((snapshot) => synchronizeLegacyPresentation(snapshot))
 
 interface PersistedAppState {
   overlayPlacement: OverlayPlacement
@@ -314,9 +325,22 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.setRecordingState, (event, state: RecordingState) => {
     assertSettingsSender(event)
-    currentState = recordingStateSchema.parse(state)
-    rebuildTrayMenu()
-    updateOverlayState(currentState)
+    synchronizeLegacyRecordingEvent(recordingStateSchema.parse(state))
+  })
+
+  ipcMain.handle(IPC.beginDictation, (event, sessionId: string) => {
+    assertSettingsSender(event)
+    const operationId = dictationSessionIdSchema.parse(sessionId)
+    const snapshot = dictationMachine.snapshot
+    if (!isTerminalDictationState(snapshot.state)) {
+      throw new Error('Another dictation operation is already active')
+    }
+    dictationMachine.dispatch({ type: 'START', operationId })
+  })
+
+  ipcMain.handle(IPC.cancelDictation, (event) => {
+    assertSettingsSender(event)
+    cancelActiveDictation('user-request')
   })
 
   ipcMain.on(IPC.setAudioLevel, (event, level: number) => {
@@ -335,14 +359,19 @@ function registerIpc(): void {
       const validatedPayload = pcmRecordingPayloadSchema.parse(payload)
       if (activeRecordingFinish) return activeRecordingFinish
 
+      const operationId = prepareMachineForAudio(validatedPayload.sessionId)
+      activeRecordingAbortController = new AbortController()
+
       activeRecordingFinish = recordingService.finish(validatedPayload, {
         autoPaste: preferences.autoPaste,
         keepRecording: preferences.keepRecordings,
         preferredTerms: vocabulary,
-        smartCorrectionEnabled: preferences.smartCorrectionEnabled
+        smartCorrectionEnabled: preferences.smartCorrectionEnabled,
+        signal: activeRecordingAbortController.signal
       })
       try {
         const result = await activeRecordingFinish
+        completeMachineFromLegacyResult(operationId, result.transcript, result.insertion)
         if (result.transcript) {
           history = [
             {
@@ -358,8 +387,12 @@ function registerIpc(): void {
           await saveAppState()
         }
         return result
+      } catch (error) {
+        failMachineOperation(operationId, error)
+        throw error
       } finally {
         activeRecordingFinish = null
+        activeRecordingAbortController = null
       }
     }
   )
@@ -526,6 +559,181 @@ function assertRendererRole(
 
 function isTrustedRendererUrl(url: string): boolean {
   return rendererPolicy.isTrustedUrl(url)
+}
+
+function synchronizeLegacyRecordingEvent(state: RecordingState): void {
+  const snapshot = dictationMachine.snapshot
+
+  if (state === 'starting') {
+    if (snapshot.state === 'starting') return
+    if (isTerminalDictationState(snapshot.state)) {
+      dictationMachine.dispatch({ type: 'START', operationId: randomUUID() })
+    }
+    return
+  }
+
+  const operationId = snapshot.operationId
+  if (!operationId) return
+
+  if (state === 'recording' && snapshot.state === 'starting') {
+    dictationMachine.dispatch({ type: 'CAPTURE_READY', operationId })
+    return
+  }
+
+  if (
+    state === 'transcribing' &&
+    (snapshot.state === 'recording' || snapshot.state === 'paused')
+  ) {
+    dictationMachine.dispatch({ type: 'STOP', operationId })
+    return
+  }
+
+  if (state === 'error' && isActiveDictationState(snapshot.state)) {
+    activeRecordingAbortController?.abort()
+    dictationMachine.dispatch({
+      type: 'FAIL',
+      operationId,
+      code: 'LEGACY_RENDERER_ERROR',
+      recoverable: true
+    })
+    return
+  }
+
+  if (state === 'idle') {
+    if (isActiveDictationState(snapshot.state)) {
+      activeRecordingAbortController?.abort()
+      dictationMachine.dispatch({
+        type: 'CANCEL',
+        operationId,
+        reason: 'renderer-reset'
+      })
+    }
+    const terminal = dictationMachine.snapshot
+    if (terminal.operationId && terminal.state !== 'idle') {
+      dictationMachine.dispatch({
+        type: 'RESET',
+        operationId: terminal.operationId
+      })
+    }
+  }
+}
+
+function prepareMachineForAudio(sessionId: string): string {
+  let snapshot = dictationMachine.snapshot
+  if (isTerminalDictationState(snapshot.state)) {
+    const operationId = sessionId
+    dictationMachine.dispatch({ type: 'START', operationId })
+    dictationMachine.dispatch({ type: 'CAPTURE_READY', operationId })
+    dictationMachine.dispatch({ type: 'STOP', operationId })
+    snapshot = dictationMachine.snapshot
+  }
+
+  const operationId = snapshot.operationId
+  if (!operationId) throw new Error('Dictation operation is missing')
+  if (operationId !== sessionId) throw new Error('Audio belongs to a stale dictation session')
+  if (snapshot.state === 'processing') {
+    dictationMachine.dispatch({ type: 'AUDIO_READY', operationId })
+  }
+  if (dictationMachine.snapshot.state !== 'recognizing') {
+    throw new Error(`Audio cannot be processed in state ${dictationMachine.snapshot.state}`)
+  }
+  return operationId
+}
+
+function completeMachineFromLegacyResult(
+  operationId: string,
+  transcript: string,
+  insertionStatus: 'pasted' | 'clipboard' | 'skipped'
+): void {
+  if (!isCurrentMachineOperation(operationId, 'recognizing')) return
+  dictationMachine.dispatch({
+    type: 'TRANSCRIPTION_READY',
+    operationId,
+    text: transcript
+  })
+
+  if (!transcript || insertionStatus === 'skipped') {
+    dictationMachine.dispatch({ type: 'COMPLETE', operationId })
+    return
+  }
+
+  dictationMachine.dispatch({ type: 'INSERT', operationId })
+  const outcome = insertionStatus === 'pasted' ? 'inserted' : 'copied'
+  const result: InsertionResult = {
+    operationId,
+    providerId: 'legacy-clipboard',
+    outcome,
+    usedFallback: true,
+    attempts: [
+      {
+        providerId: 'legacy-clipboard',
+        outcome,
+        durationMs: 0
+      }
+    ]
+  }
+  dictationMachine.dispatch({ type: 'INSERTION_COMPLETE', operationId, result })
+}
+
+function failMachineOperation(operationId: string, error: unknown): void {
+  const snapshot = dictationMachine.snapshot
+  if (snapshot.operationId !== operationId || !isActiveDictationState(snapshot.state)) return
+  dictationMachine.dispatch({
+    type: 'FAIL',
+    operationId,
+    code: errorCodeFor(error),
+    recoverable: true
+  })
+}
+
+function cancelActiveDictation(reason: string): void {
+  activeRecordingAbortController?.abort()
+  const snapshot = dictationMachine.snapshot
+  if (!snapshot.operationId || !isActiveDictationState(snapshot.state)) return
+  dictationMachine.dispatch({
+    type: 'CANCEL',
+    operationId: snapshot.operationId,
+    reason
+  })
+}
+
+function isCurrentMachineOperation(operationId: string, state: DictationState): boolean {
+  const snapshot = dictationMachine.snapshot
+  return snapshot.operationId === operationId && snapshot.state === state
+}
+
+function isTerminalDictationState(state: DictationState): boolean {
+  return state === 'idle' || state === 'completed' || state === 'error' || state === 'cancelled'
+}
+
+function isActiveDictationState(state: DictationState): boolean {
+  return !isTerminalDictationState(state)
+}
+
+function synchronizeLegacyPresentation(snapshot: Readonly<DictationSnapshot>): void {
+  const nextState: RecordingState =
+    snapshot.state === 'idle' ||
+    snapshot.state === 'completed' ||
+    snapshot.state === 'cancelled'
+      ? 'idle'
+      : snapshot.state === 'starting'
+        ? 'starting'
+        : snapshot.state === 'recording' || snapshot.state === 'paused'
+          ? 'recording'
+          : snapshot.state === 'error'
+            ? 'error'
+            : 'transcribing'
+
+  currentState = nextState
+  rebuildTrayMenu()
+  updateOverlayState(nextState)
+}
+
+function errorCodeFor(error: unknown): string {
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
+    return error.code
+  }
+  return 'DICTATION_PROCESSING_FAILED'
 }
 
 function requestRecordingToggle(): void {
@@ -808,7 +1016,7 @@ async function loadAppState(): Promise<void> {
         microphoneId: typeof stored.microphoneId === 'string' ? stored.microphoneId : '',
         autoPaste: typeof stored.autoPaste === 'boolean' ? stored.autoPaste : true,
         keepRecordings:
-          typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : true,
+          typeof stored.keepRecordings === 'boolean' ? stored.keepRecordings : false,
         showOverlayWhenIdle:
           typeof stored.showOverlayWhenIdle === 'boolean' ? stored.showOverlayWhenIdle : true,
         overlayMotion: isOverlayMotion(stored.overlayMotion)
@@ -818,6 +1026,13 @@ async function loadAppState(): Promise<void> {
           typeof stored.smartCorrectionEnabled === 'boolean'
             ? stored.smartCorrectionEnabled
             : false,
+        autoStopSilenceMs:
+          typeof stored.autoStopSilenceMs === 'number' &&
+          Number.isInteger(stored.autoStopSilenceMs) &&
+          stored.autoStopSilenceMs >= 0 &&
+          stored.autoStopSilenceMs <= 30_000
+            ? stored.autoStopSilenceMs
+            : 0,
         onboardingCompleted:
           typeof stored.onboardingCompleted === 'boolean'
             ? stored.onboardingCompleted
@@ -895,6 +1110,16 @@ async function applyPreferencePatch(patch: Partial<AppPreferences>): Promise<App
   if (patch.overlayMotion !== undefined) {
     if (!isOverlayMotion(patch.overlayMotion)) throw new Error('Invalid overlay motion')
     next.overlayMotion = patch.overlayMotion
+  }
+  if (patch.autoStopSilenceMs !== undefined) {
+    if (
+      !Number.isInteger(patch.autoStopSilenceMs) ||
+      patch.autoStopSilenceMs < 0 ||
+      patch.autoStopSilenceMs > 30_000
+    ) {
+      throw new Error('Invalid auto-stop silence duration')
+    }
+    next.autoStopSilenceMs = patch.autoStopSilenceMs
   }
 
   if (next.launchAtLogin !== preferences.launchAtLogin) {
@@ -1026,6 +1251,7 @@ function quitApplication(): void {
 function disposeApplicationResources(): void {
   if (applicationResourcesDisposed) return
   applicationResourcesDisposed = true
+  cancelActiveDictation('application-quit')
   if (hotkeyCaptureSafetyTimer) clearTimeout(hotkeyCaptureSafetyTimer)
   if (overlayMoveSaveTimer) clearTimeout(overlayMoveSaveTimer)
   hotkeyCaptureSafetyTimer = null

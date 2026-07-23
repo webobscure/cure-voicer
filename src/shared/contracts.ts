@@ -2,8 +2,10 @@ export const IPC = {
   getAppInfo: 'app:get-info',
   getOverlayInfo: 'overlay:get-info',
   setRecordingState: 'recording:set-state',
+  beginDictation: 'recording:begin',
   setAudioLevel: 'recording:set-audio-level',
   finishRecording: 'recording:finish',
+  cancelDictation: 'recording:cancel',
   recordingCommand: 'recording:command',
   overlayState: 'overlay:state',
   overlayAudioLevel: 'overlay:audio-level',
@@ -109,6 +111,7 @@ export interface AppPreferences {
   showOverlayWhenIdle: boolean
   overlayMotion: OverlayMotion
   smartCorrectionEnabled: boolean
+  autoStopSilenceMs: number
   onboardingCompleted: boolean
 }
 
@@ -141,6 +144,7 @@ export interface OverlayInfo {
 }
 
 export interface PcmRecordingPayload {
+  sessionId: string
   samples: Uint8Array
   sampleRate: 16000
   durationMs: number
@@ -159,8 +163,10 @@ export interface RecordingResult {
 export interface CureVoicerApi {
   getAppInfo(): Promise<AppInfo>
   setRecordingState(state: RecordingState): Promise<void>
+  beginDictation(sessionId: string): Promise<void>
   setAudioLevel(level: number): void
   finishRecording(payload: PcmRecordingPayload): Promise<RecordingResult>
+  cancelDictation(): Promise<void>
   setOverlayPlacement(mode: Exclude<OverlayPlacementMode, 'custom'>): Promise<OverlayPlacement>
   updatePreferences(patch: Partial<AppPreferences>): Promise<AppPreferences>
   requestGlobalInputAccess(): Promise<boolean>

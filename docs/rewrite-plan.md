@@ -100,23 +100,30 @@ release validation task in stage 8.
 
 ## Stage 2 — dictation domain and transcription
 
-Status: **not started**
+Status: **completed on 2026-07-23**
 
-- [ ] Implement authoritative state machine with `idle`, `starting`, `recording`,
+- [x] Implement authoritative state machine with `idle`, `starting`, `recording`,
       `paused`, `processing`, `recognizing`, `editing`, `inserting`, `completed`,
       `error` and `cancelled` states.
-- [ ] Add event guards, operation IDs, cancellation and deterministic recovery.
-- [ ] Move microphone capture behind a renderer capture port with chunk/session
+- [x] Add event guards, operation IDs, cancellation and deterministic recovery.
+- [x] Move microphone capture behind a renderer capture port with chunk/session
       protocol and bounded memory.
-- [ ] Add silence detection, automatic stop and pause/resume.
-- [ ] Define `SpeechRecognitionProvider` and provider registry.
-- [ ] Adapt FluidAudio and sherpa-onnx engines without changing model behaviour.
-- [ ] Add cloud/system/backend extension points and secure credential references.
-- [ ] Move tray, overlay and hotkeys to state-machine commands/snapshots.
-- [ ] Add state-machine, cancellation, microphone and provider-selection tests.
+- [x] Add silence detection, automatic stop and pause/resume capture capability.
+- [x] Define `SpeechRecognitionProvider` and provider registry.
+- [x] Adapt FluidAudio and sherpa-onnx engines without changing model behaviour.
+- [x] Add cloud/system/backend extension points and secure credential references.
+- [x] Drive tray/overlay presentation from state-machine snapshots while retaining
+      the compatibility renderer commands.
+- [x] Add state-machine, cancellation, capture-session, silence and
+      provider-selection tests.
 
 Exit criteria: existing local dictation works through the new state machine on
 macOS and Windows, including cancellation and actionable errors.
+
+The existing native ASR API cannot interrupt an inference already executing.
+Cancellation is nevertheless immediate in the UI and prevents correction,
+history and insertion after the native call returns. Cooperative native-worker
+cancellation remains a stage 8 hardening task.
 
 ## Stage 3 — insertion and clipboard safety
 

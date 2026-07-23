@@ -20,6 +20,17 @@ export interface TranscriptionOptions {
   signal?: AbortSignal
 }
 
+export interface SecureCredentialReference {
+  id: string
+  storage: 'system'
+}
+
+export interface SpeechRecognitionProviderConfiguration {
+  providerId: string
+  enabled: boolean
+  credential?: SecureCredentialReference
+}
+
 export interface TranscriptionResult {
   text: string
   language?: string
@@ -38,4 +49,3 @@ export interface SpeechRecognitionProvider {
     options: TranscriptionOptions
   ): Promise<TranscriptionResult>
 }
-

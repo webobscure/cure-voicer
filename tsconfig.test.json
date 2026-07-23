@@ -23,6 +23,7 @@
     "src/shared/types/**/*.ts",
     "src/shared/validation/**/*.ts",
     "src/modules/**/*.ts",
+    "src/main/asr/types.ts",
     "src/main/ipc/**/*.ts",
     "src/main/security/**/*.ts"
   ]

@@ -15,19 +15,19 @@ export type DictationState =
 
 export type DictationEvent =
   | { type: 'START'; operationId: string }
-  | { type: 'CAPTURE_READY' }
-  | { type: 'PAUSE' }
-  | { type: 'RESUME' }
-  | { type: 'STOP' }
-  | { type: 'AUDIO_READY' }
-  | { type: 'TRANSCRIPTION_READY'; text: string }
-  | { type: 'OPEN_EDITOR' }
-  | { type: 'INSERT' }
-  | { type: 'INSERTION_COMPLETE'; result: InsertionResult }
-  | { type: 'COMPLETE' }
-  | { type: 'CANCEL'; reason?: string }
-  | { type: 'FAIL'; code: string; recoverable: boolean }
-  | { type: 'RESET' }
+  | { type: 'CAPTURE_READY'; operationId: string }
+  | { type: 'PAUSE'; operationId: string }
+  | { type: 'RESUME'; operationId: string }
+  | { type: 'STOP'; operationId: string }
+  | { type: 'AUDIO_READY'; operationId: string }
+  | { type: 'TRANSCRIPTION_READY'; operationId: string; text: string }
+  | { type: 'OPEN_EDITOR'; operationId: string }
+  | { type: 'INSERT'; operationId: string }
+  | { type: 'INSERTION_COMPLETE'; operationId: string; result: InsertionResult }
+  | { type: 'COMPLETE'; operationId: string }
+  | { type: 'CANCEL'; operationId: string; reason?: string }
+  | { type: 'FAIL'; operationId: string; code: string; recoverable: boolean }
+  | { type: 'RESET'; operationId: string }
 
 export interface DictationSnapshot {
   state: DictationState
@@ -35,8 +35,8 @@ export interface DictationSnapshot {
   revision: number
   startedAt?: string
   transcript?: string
+  cancellationReason?: string
   errorCode?: string
   recoverable?: boolean
   insertion?: InsertionResult
 }
-

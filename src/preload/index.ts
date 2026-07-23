@@ -17,9 +17,12 @@ const api: CureVoicerApi = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo),
   setRecordingState: (state: RecordingState) =>
     ipcRenderer.invoke(IPC.setRecordingState, state),
+  beginDictation: (sessionId: string) =>
+    ipcRenderer.invoke(IPC.beginDictation, sessionId),
   setAudioLevel: (level: number) => ipcRenderer.send(IPC.setAudioLevel, level),
   finishRecording: (payload: PcmRecordingPayload) =>
     ipcRenderer.invoke(IPC.finishRecording, payload),
+  cancelDictation: () => ipcRenderer.invoke(IPC.cancelDictation),
   setOverlayPlacement: (mode: Exclude<OverlayPlacementMode, 'custom'>) =>
     ipcRenderer.invoke(IPC.setOverlayPlacement, mode),
   updatePreferences: (patch: Partial<AppPreferences>) =>
